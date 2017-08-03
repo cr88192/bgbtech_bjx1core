@@ -14,3 +14,7 @@ Additionally, another Emu may exist based on plugging a Verilog-based simulation
 
 Another project goal will to include a C compiler for the ISA, and a simplistic OS.
 * Goal would be to have a relatively simplistic Unix-style OS or RTOS.
+
+
+Predecessor [BGBTech SHx Emulator](https://github.com/cr88192/bgbtech_shxemu)
+* This project will attempt to be its own thing, but builds on this.

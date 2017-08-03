@@ -4,7 +4,7 @@ ISA:
 * Details here are subject to change without warning.
 
 
-=== Registers / Etc ===
+=== Registers ===
 
 Registers:
 *	Registers will be 32 or 64 bits.
@@ -25,10 +25,10 @@ Registers:
 
 *	PC: Program Counter
 
-*	FR0..FR15: FPU Registers (Group A)
-*	XF0..XF15: FPU Registers (Group B)
-*	YF0..YF15: FPU Registers (Group C)
-*	ZF0..ZF15: FPU Registers (Group D)
+*	FR0..FR15: FPU Registers (Bank A)
+*	XF0..XF15: FPU Registers (Bank B)
+*	YF0..YF15: FPU Registers (Bank C, N/A Basic FPU)
+*	ZF0..ZF15: FPU Registers (Bank D, N/A Basic FPU)
 
 *	R0H..R15H: Logical high half of 64-bit registers.
 **		Not normally used in 32-bit mode.
@@ -77,7 +77,7 @@ FPSCR bits:
 *	0004_0000: DN	//Denormalization Mode
 *	0008_0000: PR	//Precision
 *	0010_0000: SZ	//Load/Store Size
-*	0020_0000: FR	//Float Register Bank
+*	0020_0000: FR	//Float Register Bank (Swap FRn/XFn)
 
 
 Operating Mode:
@@ -90,6 +90,8 @@ Operating Mode:
 * SRH.TR_JQ and SRH.TR_DQ do similar, but for exception handlers.
 ** When an exception occurs, the mode is to be set according to these bits.
 
+
+=== Addressing and MMU ===
 
 Address Space:
 *	Unsigned 29 or 32 bit.
@@ -115,17 +117,6 @@ Address Space:
 **		9000_0000_0000..FFFF_FFFF_FFFF: System, MMU
 
 
-FPU (32-bit):
-*	FPU Registers are 32-bit and hold single or split-double values
-*	The FPUSCR.SZ bit controls whether to copy a single or register pair.
-*	The FPUSCR.PR bit selects between Single and Split-Double calculations.
-
-FPU (64-bit, New):
-*	NV SIMD Spec covers the FPU
-*	64-bit operation will be essentially the same as 32-bit operation.
-*	The FPU is basically a superset of the traditional FPU.
-
-
 MMU: An MMU may be used. It will be based on page-tables.
 
 A 32-bit page table will be two level, with each page consisting of 1024 entries (1024*1024*4096=4GB).
@@ -137,12 +128,23 @@ A 64-bit page table will be four level, with each page consisting of 512 entries
 This will give a 48-bit logical address space, which is sign-extended to 64 bits.
 
 
+
+=== Delay Slot ===
+
 Delay Slot:
 For branches, the instruction immediately following the branch is located in a "delay slot". This instruction will execute prior to the jump landing at the target. Branches and PC relative operations are not allowed in this space. However, BT and BF will not execute the delay-slot instruction.
 
-For PC relative instructions, the calculation will be performed relative to 4 bytes after the PC of the instruction.
+For PC relative instructions, the calculation will be performed relative to 4 bytes after the PC of the current instruction.
 * Both Long and Quad operations will use a 32-bit alignment.
+* For 32-bit instruction forms, this offset will be 6 bytes.
 
+The endianess of instructions and PC-relative loads will always match the machine endianess.
+Loads performed relative to registers will use the local endianess.
+
+Note that 32-bit instruction forms will not be allowed in the delay slot.
+
+
+=== Instruction Notation ===
 
 Opcode Size Suffixes:
 * .B, Byte (8-bit)
@@ -159,9 +161,6 @@ QWORD Loads/Stores may not be used in 32-bit mode.
 * Registers will only preserve 32 bits.
 * MOVA.Q is still valid in 32-bit mode.
 
-DWORD loads may sign-extend to 64-bits in 64-bit mode.
-
-
 Normal instructions will be 16 bit, and are expressed here as nibbles.
 * 0..9, A..F: Expresses a literal hex value.
 * m: Expresses a source register.
@@ -171,9 +170,6 @@ Normal instructions will be 16 bit, and are expressed here as nibbles.
 * d: Expresses a displacement.
 * i: Expresses an immediate value (signed)
 * j: Expresses an immediate value (unsigned)
-
-The endianess of instructions and PC-relative loads will always match the machine endianess.
-Loads performed relative to registers will use the local endianess.
 
 Displacements:
 * Are normally scaled by the size of the data type.
@@ -526,12 +522,12 @@ Basic I-Forms (16-bit)
 **	81nd MOV.W/Q R0, @(Rn,disp)	//Store Word or Quad
 ***		Always Word if disp==0
 **	82-- - XPFX1/Escape32B
-**	83-- / JSR/N
+**	83dd / JSR/N disp
 **	84md MOV.B @(Rm,disp), R0
 **	85md MOV.W/Q @(Rm,disp), R0
 ***		Always Word if disp==0
-**	86-- -
-**	87-- -
+**	86-- / BST / BCLR
+**	87-- / BST / BCLR
 **	88ii CMPEQ./Q #imm, R0
 **	89dd BT label
 **	8Aii-iiii MOVI24 #imm24, R0			//32-bit op, loads 24-bit immediate.
@@ -568,15 +564,26 @@ Basic I-Forms (16-bit)
 * Dndd MOV.L @(PC,disp), Rn			//Load DWord, DWord aligned.
 ** DQ=1: Result extended to QWord
 * Enii MOV./Q #imm, Rn				//Load immediate into register.
-* Fxxx
-** FPU / SIMD Block
+* Fxxx: FPU/SIMD Block
 
 
 === Basic FPU ===
 
 For full FPU, see NVSIMD Spec.
 * A core may opt to instead provide a more basic FPU.
+** Basic FPU will only provide for scalar operation.
 * Or, none at all.
+* ! will denote patterns that are in-use but unavailable in Basic FPU.
+
+FPU (32-bit):
+*	FPU Registers are 32-bit and hold single or split-double values
+*	The FPUSCR.SZ bit controls whether to copy a single or register pair.
+*	The FPUSCR.PR bit selects between Single and Split-Double calculations.
+
+FPU (64-bit):
+*	NV SIMD Spec covers the Full FPU
+*	64-bit operation will be basically the same as 32-bit operation.
+*	The FPU is basically a superset of the traditional FPU.
 
 
 FPU Ops
@@ -602,32 +609,120 @@ FPU Ops
 ***		Fn4D FNEG FRn
 ***		Fn5D FABS FRn
 ***		Fn6D FSQRT FRn
-***		F-7D -
+***		F-7D !
 ***		Fn8D FLDI0 FRn		//Load 0.0
 ***		Fn9D FLDI1 FRn		//Load 1.0
 ***		FnAD FCNVSD FRn
 ***		FnBD FCNVDS FRm
-***		F-CD -
-***		F-DD -
-***		F-ED -
+***		F-CD !
+***		F-DD FiDD PSETMD #imm4
+***		F-ED !
 ***		F-FD
-****			F0FD -
-****			F1FD -
-****			F2FD -
+****			F0FD !
+****			F1FD !
+****			F2FD !
 ****			F3FD FSCHG			//Flips FPSCR.SZ
-****			F4FD -
-****			F5FD -
-****			F6FD -
+****			F4FD !
+****			F5FD !
+****			F6FD !
 ****			F7FD FPCHG			//Flips FPSCR.PR
-****			F8FD -
-****			F9FD -
-****			FAFD -
-****			FBFD -
-****			FCFD -
-****			FDFD -
-****			FEFD -
+****			F8FD !
+****			F9FD !
+****			FAFD !
+****			FBFD FRCHG			//Flips FPSCR.FR
+****			FCFD !
+****			FDFD !
+****			FEFD !
 **	FnmE FMAC FRm, FRn
 **	F--F ! (BT Reserved-32)
+
+The behavior of FPU operations will depend on FPSCR.PR and FPSCR.SZ:
+* (PR=0, SZ=0): Arithmetic operators operate on Float, FMOV.S is also Float.
+* (PR=1, SZ=0): Arithmetic operators operate on Double, FMOV.S is still Float.
+* (PR=0, SZ=1): Arithmetic operators will operate on Float, FMOV.S is Pair.
+** Copies a pair of floats, which are reversed on Little-Endian targets.
+* (PR=1, SZ=1): BJX1, both arithmetic and FMOV.S will operate on Double.
+** In BJX1, this will put the two halves in the correct order.
+
+Likewise, there will be FPSCR.FR:
+* When 0, Banks A and B will be in their normal order.
+* When 1, Banks A and B will be swapped.
+** This swaps FRn and XFn for Float operations.
+** This swaps Even/Odd doubles for Double operation.
+
+
+PSETMD 4-bit
+* imm4=zpmm
+** z: FPSCR.SZ
+** p: FPSCR.PR
+** mm: Rounding Mode
+* Other bits for FPSCR are left as-is.
+
+Behahior:
+* Float operations will operate of FR0..FR15.
+** FPSCR.FR will allow alternating between FR0..FR15 and XF0..XF15.
+* Double operations will operate on Pairs.
+** Even=(FR1, FR0), (FR3, FR2), ...
+** Odd=(XF1, XF0), (XF3, XF2), ...
+** In BJX1, there will be 16 logical double registers.
+** In legacy operation, only the 8 even doubles are accessible.
+
+
+Basic FPU will also include a few 32-bit forms:
+*	8Evo-Fnm6 FMOV.S @(Rm,Ro), FRn
+*	8Evo-Fnm7 FMOV.S FRm, @(Rn,Ro)
+*	8Evd-Fnm8 FMOV.S @(Rm,disp4), FRn
+*	8Ev0-Fnm9 FMOV.S @Rm+, FRn
+*	8Evd-FnmA FMOV.S FRm, @(Rn,disp4)
+*	8Ev0-FnmB FMOV.S FRm, @-Rn
+*	8Evv-FnmC FMOV FRm, FRn		//S: FPU MOV
+
+*	8Eii-FiDD PSETMD #imm12		//Packed Set Mode (Ext/Resv)
+
+VV (FMOV/PMOV):
+* wwww-xxyy
+* wwww:
+** 0000: FRm, FRn	//Copy FRn
+** 0001:
+** 0010:
+** 0011:  Rm, FRn	//Copy GPR to FRn (FMOV.IS)
+** 0100:
+** 0101: DRm, DRn	//Copy DRn
+** 0110:
+** 0111: Rm, DRn	//Copy GPR to DRn
+** 1000: Rm, Rn		//Copy GPR (MOV.L)
+** 1001:
+** 1010: Rm, Rn		//Copy GPR (MOV.Q)
+** 1011:
+** 1100: FRm,  Rn	//Copy FRm to GPR (FMOV.SI)
+** 1101: DRm,  Rn	//Copy DRm to GPR (Rn, RnH)
+** 1110:
+** 1111: ! XRm, XRn
+* xx: Bit4/5 of Rn
+* yy: Bit4/5 of Rm
+
+
+VV (PMOV.S):
+* wwxy
+* ww=00: FRn
+* ww=01: DRn
+** Loads (FRn+0,FRn+1)
+* ww=10: DRn
+** Loads value in correct ordering for Double
+* ww=11: ! XRn
+
+PSETMD 12-bit
+* imm12=000v-wwfz-pdmm
+* v: ! VE
+** Reserved (Set to 0) in Basic FPU.
+* ww: ! Swap Mode
+** Reserved (Set to 0) in Basic FPU.
+* f: FR
+* z: SZ
+* p: PR
+* d: DN
+* mm: Rounding Mode
+* Other bits for FPSCR are cleared to 0.
 
 
 === Misc 32-bit I-Forms ===
@@ -647,7 +742,8 @@ FPU Ops
 * 3nm1-8ddd MOVU.B @(Rm, disp), Rn
 * 3nm1-9ddd MOVU.W @(Rm, disp), Rn
 
-* 3ni9-Xddd -
+* 3ni9-Xddd !
+** This group of instructions is not present in BJX1.
 
 
 === XPFX0 ===
@@ -727,8 +823,8 @@ XPFX0/Escape32 I-Forms
 **		8Exx-4xx5 -
 **		...
 **		8Exx-4xxB -
-**		8Eii-4nmC SHAD Rm, #imm, Rn			//Rn=Rm SAL Imm8 | Rn=Rm SAR Imm8
-**		8Eii-4nmD SHLD Rm, #imm, Rn			//Rn=Rm SHL Imm8 | Rn=Rm SHR Imm8
+**		8Eii-4nmC SHAD./Q Rm, #imm, Rn		//Rn=Rm SAL Imm8 | Rn=Rm SAR Imm8
+**		8Eii-4nmD SHLD./Q Rm, #imm, Rn		//Rn=Rm SHL Imm8 | Rn=Rm SHR Imm8
 **		8Exx-4xxE -
 **		8Exx-4xxF -
 *	8Edd-5nmo MOV.L @(Rm,Ro,disp), Rn		//Rm+(Ro+disp)*4
@@ -750,12 +846,12 @@ XPFX0/Escape32 I-Forms
 **		8Edd-6nmE MOVU.L @(Rm,disp8s), Rn	//Rm+disp*4
 **		8Edd-6nmF -
 
-*	8Eii-7nii ADD #imm16, Rn
+*	8Eii-7nii ADD./Q #imm16, Rn
 * 	8---
 **		8Edd-80no -
 **		8Edd-81no -
-**		8Edd-82no -
-**		8Edd-83no -
+**		8Edd-82dd BRA/N disp16				//BRA, No Delay Slot
+**		8Edd-83dd BSR/N disp16				//BSR, No Delay Slot
 **		8Edd-84mo -
 **		8Edd-85mo -
 **		8Edd-86mo -
@@ -788,10 +884,10 @@ XPFX0/Escape32 I-Forms
 **		8Exx-C5xx -
 **		8Exx-C6xx -
 **		8Exx-C7xx -
-**		8Ejj-C8nj TST #imm12, Rn
-**		8Ejj-C9nj AND #imm12, Rn
-**		8Ejj-CAnj XOR #imm12, Rn
-**		8Ejj-CBnj OR #imm12, Rn
+**		8Ejj-C8nj TST./Q #imm12, Rn
+**		8Ejj-C9nj AND./Q #imm12, Rn
+**		8Ejj-CAnj XOR./Q #imm12, Rn
+**		8Ejj-CBnj OR./Q #imm12, Rn
 **		8Exx-CCxx -
 **		8Exx-CDxx -
 **		8Exx-CExx -
@@ -807,7 +903,7 @@ XPFX0/Escape32 I-Forms
 **		8ECd-Dndd MOVU.L @(PC,disp13), RQn	//disp*4, Load DWord (Z Ext Quad)
 **		8EEd-Dndd MOV.Q @(PC,disp13), RQn	//disp*4, Load QWord
 
-*	8Eii-Enii MOV #imm16, Rn
+*	8Eii-Enii MOV./Q #imm16, Rn
 *	8Eoo-Fooo (Ext-FPU / SIMD)
 
 
