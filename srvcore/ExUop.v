@@ -17,6 +17,12 @@ DS Form: oooo-oooo z111-dddd ssss-tttt iiii-iiii	//Sign Extend
 Forms with 4-bit register IDs will only access base GPRs.
 If a form does not define a field, the value will be used from the base opcode.
 
+Op16 Forms:
+  0100-0000 z010-0001 yyyy-yyyy yyyy-yyyy
+  0100-0000 z010-0010 yyyy-nnnn mmmm-yyyy
+  Forward an SH op to the uOp decoder.
+  Used for opcodes that are special-cases.
+
  */
 
 
@@ -53,6 +59,8 @@ parameter[7:0] UOP_CMPGEQ	= 8'h1D;
 parameter[7:0] UOP_CMPHSQ	= 8'h1E;
 parameter[7:0] UOP_CMPHIQ	= 8'h1F;
 
+parameter[7:0] UOP_JMP		= 8'h20;	//PC=PC+Rt
+
 parameter[7:0] UOP_LEAB		= 8'h21;	//Normal Lea
 parameter[7:0] UOP_LEAW		= 8'h22;
 parameter[7:0] UOP_LEAI		= 8'h23;
@@ -69,6 +77,8 @@ parameter[7:0] UOP_LEADJV	= 8'h2D;
 
 parameter[7:0] UOP_MOVQ		= 8'h2F;	//Rd=Rs (64-bit)
 
+parameter[7:0] UOP_JSR		= 8'h30;	//PR=PC; PC=PC+Rt
+
 parameter[7:0] UOP_MOVLDB	= 8'h31;
 parameter[7:0] UOP_MOVLDW	= 8'h32;
 parameter[7:0] UOP_MOVLDI	= 8'h33;
@@ -82,6 +92,7 @@ parameter[7:0] UOP_MOVSTW	= 8'h3A;
 parameter[7:0] UOP_MOVSTI	= 8'h3B;
 parameter[7:0] UOP_MOVSTQ	= 8'h3C;
 
+parameter[7:0] UOP_FWOP		= 8'h40;	//Forwarded Op
 
 parameter[7:0] UOP_FADDS	= 8'h41;
 parameter[7:0] UOP_FSUBS	= 8'h42;
@@ -201,11 +212,16 @@ GpReg regs(clk,
 reg[63:0] iDataAluS;
 reg[63:0] iDataAluT;
 reg[63:0] tDataAluD;
+
 reg[63:0] regSr;
 reg[63:0] regNextSr;
 
 reg[63:0] regPc;
 reg[63:0] regNextPc;
+reg[63:0] regPrNextPc;
+
+reg[63:0] regPr;
+reg[63:0] regNextPr;
 
 reg[3:0] aluCmd;
 reg[3:0] tAluSr;
@@ -266,6 +282,10 @@ begin
 //	regSr[31: 0]=regs.creg_lo[regs.CREG_SR];
 //	regSr[63:32]=regs.creg_hi[regs.CREG_SR];
 
+	regPc=regs.reg_pc;
+	regPr=regs.reg_pr;
+	regSr=regs.reg_sr;
+
 	/* Stage 1: Fetch */
 	if(!uopPcLive)
 	begin
@@ -286,18 +306,22 @@ begin
 	end
 
 	/* Stage 2: Decode */
+
+	tRegStepPc[63:3]=61'h0;
+	tRegStepPc[2:1]=idStepPc[1:0];
+	tRegStepPc[0]=1'b0;
+
 	if(!uopPcLive)
 	begin
 		uopNextPc=idUopPc;
 		uopNextWord=idUopWord;
-		tRegStepPc[63:3]=61'h0;
-		tRegStepPc[2:1]=idStepPc[1:0];
-		tRegStepPc[0]=1'b0;
 		regNextPc=regPc+tRegStepPc;
+		regPrNextPc=regPc+tRegStepPc;
 	end
 	else
 	begin
 		regNextPc=regPc;
+		regPrNextPc=regPc+tRegStepPc;
 	end
 
 	/* Stage 3+0: Execute */
@@ -379,6 +403,8 @@ begin
 	tIsWr2D=1'b0;
 	tIsQw2D=1'b0;
 	regNextSr=regSr;
+	regNextPr=regPr;
+
 	tIdReg2D=iRegD;
 //	aguHasIndex = ((iRegT!=regs.REG_ZZR) &&
 //		(iRegT!=regs.REG_R15));
@@ -433,47 +459,62 @@ begin
 
 		4'h2:
 		begin
-			if(iRegT==regs.REG_R0)
-				aguCmd=agu1.MD_BYTE;
-			else
-				aguCmd=uopCmd[2:0];
-
-			if(uopCmd[3])
+			if(uopCmd[3:0]==4'h0)
 			begin
-				tIdReg2D=iRegS;
-				aguHasIndex = 0;
+				regNextPc = regPrNextPc + (iDataT*2);
 			end
+			else
+			begin
+				if(iRegT==regs.REG_R0)
+					aguCmd=agu1.MD_BYTE;
+				else
+					aguCmd=uopCmd[2:0];
 
-			tData2D=tDataAguD;
-			tIsWr2D=1'b1;
-//			tIsQw2D=1'b1;
-			tIsQw2D = (uopCmd!=UOP_MOVI);
+				if(uopCmd[3])
+				begin
+					tIdReg2D=iRegS;
+					aguHasIndex = 0;
+				end
+
+				tData2D=tDataAguD;
+				tIsWr2D=1'b1;
+	//			tIsQw2D=1'b1;
+				tIsQw2D = (uopCmd!=UOP_MOVI);
+			end
 		end
 
 		4'h3:
 		begin
-			if(iRegT==regs.REG_R0)
-				aguCmd=agu1.MD_BYTE;
-			else
-				aguCmd=uopCmd[2:0];
-
-			memCmd=uopCmd[2:0];
-			memAddr=tDataAguD[47:0];
-			tIsWr2D=uopCmd[3];
-			tIsQw2D=uopCmd[2];
-
-			memWrValue=iDataD;
-			tData2D=memRdValue;
-
-			if(uopCmd[3])
+			if(uopCmd[3:0]==4'h0)
 			begin
-				memRd=1'b0;
-				memWr=1'b1;
+				regNextPr = regPrNextPc;
+				regNextPc = regPrNextPc + (iDataT*2);
 			end
 			else
 			begin
-				memRd=1'b1;
-				memWr=1'b0;
+				if(iRegT==regs.REG_R0)
+					aguCmd=agu1.MD_BYTE;
+				else
+					aguCmd=uopCmd[2:0];
+
+				memCmd=uopCmd[2:0];
+				memAddr=tDataAguD[47:0];
+				tIsWr2D=uopCmd[3];
+				tIsQw2D=uopCmd[2];
+
+				memWrValue=iDataD;
+				tData2D=memRdValue;
+
+				if(uopCmd[3])
+				begin
+					memRd=1'b0;
+					memWr=1'b1;
+				end
+				else
+				begin
+					memRd=1'b1;
+					memWr=1'b0;
+				end
 			end
 		end
 
@@ -521,6 +562,87 @@ begin
 		default: begin
 		end
 	endcase
+
+	if(uopCmd==8'h40)
+	begin
+		case(uopWord[15:12])
+
+		4'h0:
+			case(uopWord[3:0])
+			4'h8:
+				case(uopWord[7:4])
+				4'h0:
+					regNextSr[0]=0;
+				4'h1:
+					regNextSr[0]=1;
+
+				4'h4:
+					case(uopWord[11:8])
+					4'h0:	regNextSr[1]=0;
+					4'h1:	regNextSr[12]=0;
+					4'h2:	regNextSr[31]=0;
+					4'h3:	begin regNextSr[31]=0; regNextSr[12]=0; end
+					default:	regNextSr[1]=0;
+					endcase
+				4'h5:
+					case(uopWord[11:8])
+					4'h0:	regNextSr[1]=1;
+					4'h1:	regNextSr[12]=1;
+					4'h2:	regNextSr[31]=1;
+					4'h3:	begin regNextSr[31]=1; regNextSr[12]=1; end
+					default:	regNextSr[1]=1;
+					endcase
+
+				4'h6:
+					regNextSr[0]=!regSr[0];
+
+				default:	begin end
+				endcase
+
+			4'h9:
+				case(uopWord[7:4])
+				4'h0:
+					begin end		//NOP
+				4'h1:
+				begin
+					regNextSr[0]=0;
+					regNextSr[8]=0;
+					regNextSr[9]=0;
+				end
+
+				4'h2:
+				begin
+					tData2D[63:0]=0;
+					tData2D[0]=regSr[0];
+				end
+
+				4'h3:
+				begin
+					regNextSr[0]=iDataT[0];
+				end
+
+				default:	begin end
+				endcase
+
+			4'hB:
+				case(uopWord[7:4])
+				4'h0:
+					regNextPc=regPr;
+
+				4'h1:
+					begin end		//SLEEP
+
+				4'h2:		//RTE
+					begin
+					end
+
+				4'h3:
+					begin end		//BRK
+				endcase
+		default: begin
+		end
+		endcase
+	end
 end
 
 always @ (posedge clk)
@@ -532,11 +654,17 @@ begin
 //	regs.sreg_lo[regs.SREG_PC] <= regNextPc[31: 0];
 //	regs.sreg_hi[regs.SREG_PC] <= regNextPc[63:32];
 
-	regSr      <= regNextSr;
-	regPc      <= regNextPc;
+//	regSr      <= regNextSr;
+//	regPc      <= regNextPc;
+//	regPr      <= regNextPc;
+
+	regs.reg_sr <= regNextSr;
+	regs.reg_pc <= regNextPc;
+	regs.reg_pr <= regNextPc;
+
 
 	/* Stage 1->2 */
-	idInstWord <= idNextInstWord;
+	idInstWord  <= idNextInstWord;
 
 	/* Stage 2->3 */
 	ixRegD      <= idRegD;

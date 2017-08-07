@@ -45,6 +45,11 @@ reg[12:0] tExc_C;
 reg[12:0] tExc_D;
 reg[12:0] tExc_E;
 
+reg[63:0]		tDst;
+
+assign dst = tDst;
+
+
 always @ (clk && enable)
 begin
 	sgna=srca[63];
@@ -186,18 +191,18 @@ begin
 	
 	if(exc[12])
 	begin
-		dst[63:0]=64'h0;
+		tDst[63:0]=64'h0;
 	end
 	else if(exc[11])
 	begin
-		dst[63]=sgnc;
-		dst[62:0]=63'h7FF0_0000_0000_0000;
+		tDst[63]=sgnc;
+		tDst[62:0]=63'h7FF0_0000_0000_0000;
 	end
 	else
 	begin
-		dst[63]=sgnc;
-		dst[62:52]=exc[10:0];
-		dst[51:0]=tFracC[51:0];
+		tDst[63]=sgnc;
+		tDst[62:52]=exc[10:0];
+		tDst[51:0]=tFracC[51:0];
 	end
 end
 

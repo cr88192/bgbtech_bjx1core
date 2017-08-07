@@ -43,6 +43,9 @@ reg[63:0]	tDstQ;
 reg[5:0]	tShl;
 reg[3:0] 	tSr;
 
+assign	dst=tDstQ;
+assign	sro=tSr;
+
 
 always @ (opMode) begin
 	case(opMode)
@@ -139,8 +142,9 @@ always @ (opMode) begin
 			tSr=sri;
 		end
 	endcase
-	dst=tDstQ;
-	sro=tSr;
+
+//	dst=tDstQ;
+//	sro=tSr;
 end
 
 endmodule

@@ -1,0 +1,651 @@
+BT Static Register VM (Bytecode/Wordcode)
+
+Arch FOURCC: 'BSR1'
+
+Idea:
+* Intended to run C.
+** Lower complexity alternative to FRVM.
+** Hopefully better suited for use as a VM bytecode than SH.
+** Intended more for a moderately simple VM rather than performance.
+* Instructions are variable-length (16 or 32 bit).
+* The default mode will be 64-bits.
+
+Non-Goals:
+* Use as a compiler IR.
+* Dealing with variable pointer size.
+* Hardware Implementation
+
+A "32-bit only" variant may exist.
+* Registers are reduced to 32-bits.
+** 16x 32-bits.
+** Pointer ops will use Int
+* Quadword ops are optional or absent.
+* FPU ops are single-precision.
+** Double is optional.
+* This is mostly intended for targets too limited to run the normal version.
+
+
+=== Registers ===
+
+Registers: 16x 64-bit
+* R0..R15: Int/Ptr Registers
+** R0L..R15L: Low half of R0..R15
+** R0H..R15H: High half of R0..R15
+* F0..F15: Double Registers (Basic)
+** F0L..F15L: Low half of F0..F15 (Scalar Float)
+** F0H..F15H: High half of F0..F15 (Scalar Float)
+** X0..X15: Vector Registers
+** X0L..X15L: Low half of Vector registers (Equivalent to F0..F15).
+** X0H..X15H: High half of Vector registers.
+* C0..C15: Control Regs
+** C0: LR (Link Register)
+** C1: SP (Stack Pointer)
+** C2: PC (Program Counter)
+** C3: SR (Status Register)
+***  Bit0=T (True/False)
+** C4: CT (Constant Table)
+*** Constant Table, Scratch
+** C5: OT (Offset Table)
+*** Holds offsets to globals and functions
+** C6: TIB1 (Thread Info Block 1)
+** C7: TIB2 (Thread Info Block 2)
+*** These registers are intended to be used for thread-local state.
+
+* C16..C255: Extended Control Regs
+** C16: IVBR (Interrupt Vector Base)
+*** Treated as a table of 256x 64-bit pointers.
+*** Special Interrupts transfer control to IVBR+0x800
+** C17: IVNR (Interrupt Vector Number)
+*** Provides additional information about an interrupt.
+** C18: ISPC (Interrupt Link Register)
+** C19: ISSP (Interrupt Saved Stack Pointer)
+** C20: ISSR (Interrupt Saved Status Register)
+
+
+=== Types ===
+
+Base Types:
+* Int (Integer, 32-bit)
+** Uses low 32-bits of 64-bit register.
+* Long (Integer, 64-bit)
+* Float
+** In registers, represented as a double.
+** Nominally, scalar arithmetic will be done as double.
+* Pointer (Machine-dependent, nominally 64-bit)
+** Size will be fixed at 64-bits when program is compiled.
+** Will also serve as a 64-bit integer type.
+** Only half the pointer would be used as such on 32-bit targets.
+* Vector (Register Pair, 128-bit)
+** Vec2d: Double Pair (X, Y)
+** Vec4f: Pair of float pairs (XY, ZW)
+** Vec3xf: (XY, Zf)
+
+Vec3xf:
+* Vec3xf, 3x float
+* Final dword, low mantissa bits.
+** Z: Bits  0.. 9
+** Y: Bits 10..20
+** X: Bits 21..31
+* Behaves like a 3 float vector with extra bits added to the mantissa for each component.
+** If the fourth component is zeroed, vec3xf is structurally equivalent to a 3-float vector.
+
+Memory:
+* Native byte order will be little endian.
+* Data is to be kept "naturally aligned".
+** 64-bit types will have a 64 bit alignment.
+
+
+=== Memory Model ===
+
+Pointers:
+* Pointers will always be represented in-memory as 64 bits.
+* Pointer-specific operations may ignore the high-bits if N/A.
+** Ex: LEA on a 32-bit target is not required to do 64-bit arithmetic.
+** Pointer compare will behave as appropriate for the target.
+
+The memory layout will be use-case or VM specific.
+* A program may be executed within the host memory space or within a sandboxed virtual space.
+* Libraries will generally be loaded in an existing address space.
+* Binary images will generally be given their own address space.
+
+
+=== Execution Model ===
+
+Calling Convention:
+* First 4 arguments are passed in registers (non-vararg).
+** For vararg calls, everything is passed on stack.
+** If prototype was missing, pass in both registers and on stack.
+* Remaining arguments are passed on the stack.
+** First 4 arguments have a reserved shadow space.
+** On function entry, SP+0 is first argument, SP+1 is second argument, ...
+** Caller manages stack frame.
+* R0/R1 are used for return values.
+* R2 is used to pass a struct return address.
+* R4..R7 used for Int/Pointer arguments.
+* F4..F7 used for Float/Double/Vector arguments.
+* Structs are passed by reference (if they don't fit in a register).
+* R8..R15 are callee save
+* F8..F15 are callee save
+** X8H..X15H are also callee save.
+
+Stack advances downwards with stack-relative references relative to the current stack bottom.
+
+Branches:
+* Generally relative to the word immediately following the branch.
+* This ISA does not use a delay slot.
+* The value of SR.T will be undefined following a branch.
+* Also SR.T will be undefined following STTI and STNTI.
+
+Combining Ops:
+* Compare+Branch ops may combine.
+* Compare+STTI/STNTI may combine.
+
+
+A program may support self-modifying code.
+* However, an explicit cache flush will be required if the memory for previously executed code is modified.
+* Failing to flush the cache may lead to undefined results.
+
+Memory accesses are not necessarily strictly synchronized between threads.
+* Memory writes may not be visible to other threads for an indeterminate period of time.
+* Memory reads may not necessarily reflect the most recent view of memory.
+* Synchronization ops may be required for accesses to memory shared between threads.
+** Access to memory via a volatile pointer is to use synchronization operators.
+
+Traces:
+* Variable Fixed limit.
+* A trace will end on a control-flow instruction (or a LABEL).
+** The control-flow op or LABEL will be in the tail position of the preceding trace.
+** LABEL ops will not be required.
+* Loads and constants may be propagated to subsequent instructions.
+** LDCT instructions will assume the load to be constant.
+*** Modification to constant-table data will be equivalent to a self-modifying-code condition.
+*** Behavior of reaching an LDCT with a non-constant CT value will be undefined.
+*** Behavior will be local to a given address space.
+** LDOT will assume the address to be constant.
+*** However, LDOT will be treated as a memory load relative to a fixed address.
+*** Behavior will be local to a given address space.
+
+
+=== Opcodes, 16-bit Forms ===
+
+Notation
+* //? Optional/Uncertain
+* //!32	Absent in 32-bit mode.
+
+Opcodes, 16-bit forms.
+* 00nm  ADDI   Rn, Rm		//Add Int, Rn=Rn+Rm
+* 01nm  SUBI   Rn, Rm		//Sub Int, Rn=Rn-Rm
+* 02nm  MULI   Rn, Rm		//Mul Int, Rn=Rn*Rm
+* 03nm  ANDI   Rn, Rm		//And Int, Rn=Rn&Rm
+* 04nm  ORI    Rn, Rm		//Or Int, Rn=Rn|Rm
+* 05nm  XORI   Rn, Rm		//Xor Int, Rn=Rn^Rm
+* 06nm  SHLI   Rn, Rm		//Shl Int, Rn=Rn<<Rm
+* 07nm  SARI   Rn, Rm		//Sar Int, Rn=Rn>>Rm (Signed)
+* 08nm  ADDF   Rn, Rm		//Add Real
+* 09nm  SUBF   Rn, Rm		//Sub Real
+* 0Anm  MULF   Rn, Rm		//Mul Real
+* 0Bnm  DIVF   Rn, Rm		//Div Real
+* 0Cnm  CVTI2F Rn, Rm		//Int to Real
+* 0Dnm  CVTF2I Rn, Rm		//Real to Int
+* 0Enm  LDCR   Cn, Rm
+** Load Register into Control Register.
+* 0Fnm  STCR   Rn, Cm
+** Store Control Register into Register.
+
+* 10nm  MOVB Rn, (Rm)		//Load Byte from memory
+* 11nm  MOVW Rn, (Rm)
+* 12nm  MOVI Rn, (Rm)
+* 13nm  MOVQ Rn, (Rm)		//!32
+** Load Byte/Word/Int/(Long|Pointer)
+* 14nm  MOVB (Rn), Rm		//Store Byte to memory
+* 15nm  MOVW (Rn), Rm
+* 16nm  MOVI (Rn), Rm
+* 17nm  MOVQ (Rn), Rm		//!32
+** Store Byte/Word/Int/(Long|Pointer)
+* 18nm  MOVF Rn, (Rm)		//Load Float
+* 19nm  MOVD Rn, (Rm)		//!32, Load Double
+* 1Anm  MOVF (Rn), Rm		//Store Float
+* 1Bnm  MOVD (Rn), Rm		//!32, Store Double
+* 1Cnm  MOVI Rn, Rm			//MOV Int
+* 1Dnm  MOVQ Rn, Rm			//!32, MOV Long/Pointer
+* 1Enm  MOVF Rn, Rm			//MOV Float
+* 1F0n  PUSHI Rn
+* 1F1n  PUSHF Fn
+* 1F2n  PUSHQ Rn		//!32, Push Quad/Pointer
+* 1F3n  PUSHV Fn 		//!32, Push Fn pair
+* 1F4n  POPI Rn
+* 1F5n  POPF Fn
+* 1F6n  POPQ Rn			//!32, Pop Quad/Pointer
+* 1F7n  POPV Fn 		//!32, Pop Fn pair
+* 1F8n  PUSHC Cn
+* 1F9n  POPC Cn
+* 1FAn  SYNCO Rn		//Sync Data Cache at Address
+* 1FBn  SYNCI Rn		//Sync Instruction Cache at Address
+* 1FCn  INCI Rn			//Rn=Rn+1, (Rn==0) => SR.T
+* 1FDn  DECI Rn			//Rn=Rn-1, (Rn==0) => SR.T
+* 1FEn  ?
+* 1FFn  ?
+
+* 20dd  PUSHN disp
+** Push space for DD stack words.
+* 21dd  POPN disp
+** Pop space for DD stack words.
+* 22nm  CMPEQI Rn, Rm	//Compare Int Rn==Rm
+* 23nm  CMPGTI Rn, Rm	//Compare Int Rn>Rm
+* 24nm  CMPGEI Rn, Rm	//Compare Int Rn>=Rm
+* 25nm  CMPEQF Rn, Rm	//Compare Float Rn==Rm
+* 26nm  CMPGTF Rn, Rm	//Compare Float Rn>Rm
+* 27nm  CMPGEF Rn, Rm	//Compare Float Rn>=Rm
+** Compare values, update SR.T
+
+* 280n  CMPPZI Rn	//Int, Rn>=0
+* 281n  CMPPLI Rn	//Int, Rn>0
+* 282n  CMPPZF Rn	//Float, Rn>=0
+* 283n  CMPPLF Rn	//Float, Rn>0
+* 284n  CMPPZQ Rn	//!32, Long, Rn>=0
+* 285n  CMPPLQ Rn	//!32, Long, Rn>0
+* 286m  JMP Rn		//Jump to address given in register.
+* 287m  JSR Rn		//Call to address given in register.
+* 288m  JMPF Rn		//Jump to address given as PC+2+Rn.
+* 289m  JSRF Rn		//Call to address given in PC+2+Rn.
+* 28An  EXTSI Rn	//!32, Signed Int to Long
+* 28Bn  EXTUI Rn	//!32, Unsigned Int to Long
+* 28Cn  EXTSB Rn	//Signed Byte to Int
+* 28Dn  EXTUB Rn	//Unsigned Byte to Int
+* 28En  EXTSW Rn	//Signed Word to Int
+* 28Fn  EXTUW Rn	//Unsigned Word to Int
+* 290n  NEGI Rn		//Rn=-Rn
+* 291n  NOTI Rn		//Rn=~Rn
+* 292n  LNTI Rn		//Rn=!Rn
+* 293n  STTI Rn		//Rn=SR.T
+* 294n  NEGQ Rn		//!32, Rn=-Rn
+* 295n  NOTQ Rn		//!32, Rn=~Rn
+* 296n  LNTQ Rn		//!32, Rn=!Rn
+* 297n  STNTI Rn	//Rn=!SR.T
+* 298n  NEGF Fn		//Fn=-Fn
+* 299n  ABSF Fn		//Fn=fabs(Fn)
+* 29An  SQRTF Fn	//Fn=sqrt(Fn)
+* 29Bn  CMPZF Fn	//Float, Fn==0
+* 29Cn  CMPZI Rn	//Int, Rn==0
+* 29Dn  CMPZQ Rn	//!32, Long, Rn==0
+* 29En  CMPZP Rn	//Pointer, Rn==0
+* 29F0  NOP			//Does nothing, Pad
+* 29F1  RTS			//Return (PR->PC)
+* 29F2  SLEEP		//Halt/Sleep
+* 29F3  RTE			//Return (Interrupt)
+* 29F4  BREAK		//Breakpoint
+* 29F5  SYNCO		//Sync Data Cache (All)
+* 29F6  SYNCI		//Sync Instruction Cache (All)
+* 29F7  LABEL		//End Instruction Trace (Hint)
+** Indicates that multiple control-flow paths converge following this op.
+** Mostly serves as an optimization hint for the trace decoder.
+* 29F8  ?
+* ...
+* 29FF  ?
+* 2Anm  TSTI Rn, Rm		//(Int, ((Rm&Rn)==0) => SR.T )
+* 2Bnm  TSTQ Rn, Rm		//!32, (Long, ((Rm&Rn)==0) => SR.T )
+* 2Cnm  DIFFPB Rn, Rm
+* 2Dnm  DIFFPW Rn, Rm
+* 2Enm  DIFFPI Rn, Rm
+* 2Fnm  DIFFPQ Rn, Rm
+** Rn=(Rn-Rm)/Sc
+** Diff Pointer (Ptr-Ptr)=>Int
+
+* 30nm  CMPEQP Rn, Rm		//Compare Pointer Rn==Rm
+* 31nm  CMPGTP Rn, Rm		//Compare Pointer Rn>Rm
+* 32nm  CMPGEP Rn, Rm		//Compare Pointer Rn>=Rm
+* 33nm  CMPHII Rn, Rm		//Compare UInt Rn>Rm
+* 34nm  CMPHSI Rn, Rm		//Compare UInt Rn>=Rm
+* 35nm  CMPEQQ Rn, Rm		//!32, Compare Long Rn==Rm
+* 36nm  CMPGTQ Rn, Rm		//!32, Compare Long Rn>Rm
+* 37nm  CMPGEQ Rn, Rm		//!32, Compare Long Rn>=Rm
+* 38nm  CMPHIQ Rn, Rm		//!32, Compare ULong Rn>Rm
+* 39nm  CMPHSQ Rn, Rm		//!32, Compare ULong Rn>=Rm
+* 3Axx  BRAOT  imm8			//Load+Branch via Offset Table
+* 3Bxx  BSROT  imm8			//Load+Call via Offset Table
+* 3Cnm  MOVF Rn, (Rm+)
+* 3Dnm  MOVD Rn, (Rm+)		//!32, 
+* 3Enm  MOVF (Rn+), Rm
+* 3Fnm  MOVD (Rn+), Rm		//!32, 
+** Load/Store Float/Double, Increment
+
+* 4nii  LDC8I Rn, imm8s
+** Load int as 8-bit sign-extended value.
+* 5nii  LDCTI Rn, idx8
+** Load constant integer from constant-table (32-bit, CT+idx*4).
+
+* 6edd  BRr disp10
+** 60dd..63dd  LDCT disp10
+*** Load Constant Table Register (PC+(disp+1)*8, aligned to 64 bits).
+** 64dd..67dd  BRA disp10s
+*** Branch (disp*2)
+** 68dd..6Bdd  BRT disp10s
+** 6Cdd..6Fdd  BRF disp10s
+*** Branch If true/false (disp*2)
+
+* 70ni  ADDI Rn, imm4
+* 71ni  SUBI Rn, imm4
+* 72ni  MULI Rn, imm4s
+* 73nm  SHRI Rn, Rm			//Rn=Rn>>Rm, Unsigned Int
+* 74ni  SHLI1 Rn, imm4 		//( 0..15)
+* 75ni  SHLI2 Rn, imm4		//(16..31)
+* 74ni  SARI1 Rn, imm4		//( 0..15)
+* 77ni  SARI2 Rn, imm4		//(16..31)
+* 78nm  LEAB Rn, Rm
+* 79nm  LEAW Rn, Rm
+* 7Anm  LEAI Rn, Rm
+* 7Bnm  LEAQ Rn, Rm
+** Rn=Rn+Rm*Sc
+** LEA, Rm interpreted as Int.
+* 7Cni  LEAB Rn, imm4s
+* 7Dni  LEAW Rn, imm4s
+* 7Eni  LEAI Rn, imm4s
+* 7Fni  LEAQ Rn, imm4s
+** Rn=Rn+imm*Sc
+** Adjust pointer by scaled index/offset.
+
+* 8n0d..8n3d LDSPQ Rn, disp6		//Load Rn from (SP+disp*8)
+* 8n4d..8n7d STSPQ Rn, disp6		//Store Rn to (SP+disp*8)
+* 8n8d..8nBd LDSPF Fn, disp6		//Load Fn from (SP+disp*8)
+* 8nCd..8nFd STSPF Fn, disp6		//Store Fn to (SP+disp*8)
+** Load or Store to/from stack variable.
+** Does a 32-bit operation in 32-bit mode.
+
+* 90nm  MOVB Rn, (Rm+)
+* 91nm  MOVW Rn, (Rm+)
+* 92nm  MOVI Rn, (Rm+)
+* 93nm  MOVQ Rn, (Rm+)
+** Load Byte/Word/Int/(Long|Pointer), Increment Address
+* 94nm  MOVB (Rn+), Rm
+* 95nm  MOVW (Rn+), Rm
+* 96nm  MOVI (Rn+), Rm
+* 97nm  MOVQ (Rn+), Rm
+** Store Byte/Word/Int/(Long|Pointer), Increment Address
+* 98nm  MOVB Rn, (-Rm)
+* 99nm  MOVW Rn, (-Rm)
+* 9Anm  MOVI Rn, (-Rm)
+* 9Bnm  MOVQ Rn, (-Rm)
+** Load Byte/Word/Int/(Long|Pointer), Decrement Address
+* 9Cnm  MOVB (-Rn), Rm
+* 9Dnm  MOVW (-Rn), Rm
+* 9Enm  MOVI (-Rn), Rm
+* 9Fnm  MOVQ (-Rn), Rm
+** Store Byte/Word/Int/(Long|Pointer), Decrement Address
+
+* A0dd  ?
+* A1dd  ?
+* A2dd  ?
+* A3dd  ?
+* A4nm  ?
+* A5nm  ?
+* A60x  ?
+* ...
+* A7Fx  ?
+* A8nm  ADDQ Rn, Rm  //!32, (Add Long)
+* A9nm  SUBQ Rn, Rm  //!32, (Sub Long)
+* AAnm  MULQ Rn, Rm  //!32, (Mul Long)
+* ABnm  ANDQ Rn, Rm  //!32, (And Long)
+* ACnm  ORQ  Rn, Rm  //!32, (Or  Long)
+* ADnm  XORQ Rn, Rm  //!32, (Xor Long)
+* AEnm  SHLQ Rn, Rm  //!32, (Shl Long << Int)
+* AFnm  SARQ Rn, Rm  //!32, (Sar Long >> Int)
+
+* Bn0x..Bn3x  LDOTQ Rn, idx6
+** Load (Long|Pointer) from offset-table (64-bit, OT+idx*8).
+* Bn4x..Bn7x  LDCTQ Rn, idx6
+** Load constant Long from constant-table (64-bit, CT+idx*8).
+* Bn8x..BnBx  LDCTF Rn, idx6
+** Load constant Float from constant-table (64-bit, CT+idx*4).
+* BnCx..BnFx  LDCTD Rn, idx6
+** Load constant Double from constant-table (64-bit, CT+idx*8).
+
+* C000..DFFF: Vector Block
+** The exact assignment of instructions in this range is flexible.
+** May depend on active vector mode.
+** Absent in 32-bit mode.
+
+Vector Block (Float32)
+* C0nm  ADD4F   Fn, Fm  //(Add 4 float vector)
+* C1nm  SUB4F   Fn, Fm  //(Sub 4 float vector)
+* C2nm  MUL4F   Fn, Fm  //(Mul 4 float vector)
+* C3nm  DIV4F   Fn, Fm  //(Div 4 float vector)
+* C4nm  ADD3XF  Fn, Fm  //(Add 3 xfloat vector)
+* C5nm  SUB3XF  Fn, Fm  //(Sub 3 xfloat vector)
+* C6nm  MUL3XF  Fn, Fm  //(Mul 3 xfloat vector)
+* C7nm  DIV3XF  Fn, Fm  //(Div 3 xfloat vector)
+* C8nm  DOT4F   Fn, Fm  //(Dot 4 float vector)
+* C9nm  DOT3XF  Fn, Fm  //(Dot 3 xfloat vector)
+* CAnm  CRSS4F  Fn, Fm  //(Cross 4 float vector)
+* CBnm  CRSS3XF Fn, Fm  //(Cross 3 xfloat vector)
+* CCnm  GET2FX  Fn, Fm  //(Get X from a 2-float pair)
+* CDnm  GET2FY  Fn, Fm  //(Get Y from a 2-float pair)
+* CEnm  SET2FX  Fn, Fm  //(Set X in a 2-float pair)
+* CFnm  SET2FY  Fn, Fm  //(Set Y in a 2-float pair)
+* D0nm  GET3XFX Fn, Fm  //(Get X from a 3-xfloat vector)
+* D1nm  GET3XFY Fn, Fm  //(Get Y from a 3-xfloat vector)
+* D2nm  GET3XFZ Fn, Fm  //(Get Z from a 3-xfloat vector)
+* D3nm  SET3XFX Fn, Fm  //(Set X in a 3-xfloat vector)
+* D4nm  SET3XFY Fn, Fm  //(Set Y in a 3-xfloat vector)
+* D5nm  SET3XFZ Fn, Fm  //(Set Z in a 3-xfloat vector)
+* D60n  NEG4F   Fn      //(Negate 4 float vector)
+* D61n  ABS4F   Fn      //(Absolute 4 float vector)
+* D62n  SQRT4F  Fn      //(Sqrt 4 float vector)
+* D63n  ?
+* D64n  NEG3XF  Fn      //(Negate 3 xfloat vector)
+* D65n  ABS3XF  Fn      //(Absolute 3 xfloat vector)
+* D66n  SQRT3XF Fn      //(Sqrt 3 xfloat vector)
+* D67n  TRCT3XF Fn		//(Truncate 3 xfloat vector to 3 float)
+* D68n  ?
+* ...
+* D6Fn  ?
+* D70x  ?
+* ...
+* DFFx  ?
+
+
+=== Opcodes, 32-bit Forms ===
+
+* Exxx-xxxx: 32 bit
+* Fxxx-xxxx: 32 bit
+
+32-bit Forms.
+* E000-dsti  MOVB Rd, (Rs, Rt, imm4)
+* E001-dsti  MOVW Rd, (Rs, Rt, imm4)
+* E002-dsti  MOVI Rd, (Rs, Rt, imm4)
+* E003-dsti  MOVQ Rd, (Rs, Rt, imm4)		//!32, 
+** Load from Rs+(Rt+imm)*Sc
+
+* E004-dsti  MOVB (Rd, Rs, imm4), Rt
+* E005-dsti  MOVW (Rd, Rs, imm4), Rt
+* E006-dsti  MOVI (Rd, Rs, imm4), Rt
+* E007-dsti  MOVQ (Rd, Rs, imm4), Rt		//!32, 
+** Store to Rs+(Rt+imm)*Sc
+
+* E008-dsii  ADDI Rd, Rs, imm8s
+* E009-dsii  MULI Rd, Rs, imm8s
+* E00A-dsii  ANDI Rd, Rs, imm8
+* E00B-dsii  ORI Rd, Rs, imm8
+* E00C-dsii  XORI Rd, Rs, imm8
+* E00D-dsii  SHLRI Rd, Rs, imm8
+** Rd=Rs op imm
+
+* E00E-(n0ii..n7ii)  LDCTI Rn, idx11  //Load Constant (Int 32)
+* E00E-(n8ii..nFxx)  LDCTQ Rn, idx11  //Load Constant (Long/Pointer)
+* E00F-(n0ii..n7xx)  LDCTF Rn, idx11  //Load Constant (Float 32)
+* E00F-(n8ii..nFxx)  LDCTD Rn, idx11  //Load Constant (Double)
+** Load constant from constant-table.
+
+* E010-edst  ADDI/Q Rd, Rs, Rt
+* E011-edst  SUBI/Q Rd, Rs, Rt
+* E012-edst  MULI/Q Rd, Rs, Rt
+* E013-edst  ANDI/Q Rd, Rs, Rt
+* E014-edst  ORI/Q  Rd, Rs, Rt
+* E015-edst  XORI/Q Rd, Rs, Rt
+* E016-edst  SHLI/Q Rd, Rs, Rt
+* E017-edst  SARI/Q Rd, Rs, Rt
+** Rd=Rs op Rt
+** e: qdst; q=(0: Int, 1: Long); dst=Bit 4 of D/S/T
+* E018-edst  ADDF Rd, Rs, Rt
+* E019-edst  SUBF Rd, Rs, Rt
+* E01A-edst  MULF Rd, Rs, Rt
+* E01B-edst  DIVF Rd, Rs, Rt
+** Rd=Rs op Rt
+** e: qdst; q=Reserved; dst=Bit 4 of D/S/T
+
+* E020-00nm  BSWAPSW Rn, Rm		//Swap word bytes, Sign Extend
+* E020-01nm  BSWAPUW Rn, Rm		//Swap word bytes, Zero Extend
+* E020-02nm  BSWAPI Rn, Rm		//Swap DWord Bytes (Int)
+* E020-03nm  BSWAPQ Rn, Rm		//Swap QWord Bytes (Long)
+* E020-04nm  BSWAPSI Rn, Rm		//Swap dword bytes, Sign Extend to Long
+* E020-05nm  BSWAPUI Rn, Rm		//Swap dword bytes, Zero Extend to Long
+* E020-06nm  ?
+* E020-07nm  SHRQ Rn, Rm		//(Shr Long >> Int)
+* E020-08nm  SDIVI Rn, Rm		//Signed Int Divide
+* E020-09nm  UDIVI Rn, Rm		//Unsigned Int Divide
+* E020-0Anm  SMODI Rn, Rm		//Signed Int Divide
+* E020-0Bnm  UMODI Rn, Rm		//Unsigned Int Divide
+* E020-0Cnm  SDIVQ Rn, Rm		//Signed Int Divide
+* E020-0Dnm  UDIVQ Rn, Rm		//Unsigned Int Divide
+* E020-0Enm  SMODQ Rn, Rm		//Signed Int Divide
+* E020-0Fnm  UMODQ Rn, Rm		//Unsigned Int Divide
+
+* E020-10nm  LDIOI Rn, (Rm)		//Load DWord from IO Bus
+* E020-11nm  LDIOQ Rn, (Rm)		//Load QWord from IO Bus
+* E020-12nm  STIOI (Rn), Rm		//Store DWord to IO Bus
+* E020-13nm  STIOQ (Rn), Rm		//Store QWord to IO Bus
+* E020-14xx  ?
+* ...
+* E020-1Fxx  ?
+* E020-20xx  ?
+* ...
+* E020-7Fxx  ?
+
+
+* E021-0xxx  ?
+* E021-1nii  LDCR Cii, Rn		//Load Rn into Cii
+* E021-2nii  STCR Rn, Cii		//Store Cii into Rn
+* E021-3enm  / MOV2 Rn, Rm		//Store Cii into Rn
+** e: ttnm
+** tt: 0=Int, 1=Quad, 2=Float, 3=Double
+
+* E030-niii  ADDI Rn, imm12s
+* E031-niii  MULI Rn, imm12s
+* E032-niii  ANDI Rn, imm12
+* E033-niii  ORI Rn, imm12
+* E034-niii  XORI Rn, imm12
+* E035-niii  / SHLRI Rn, imm12
+** Rn=Rn op imm
+
+* E036-dsti  MOVV Fd, (Rs, Rt, imm4)
+* E037-dsti  MOVV (Rd, Rs, imm4), Ft
+
+* E038-niii  ADDQ Rn, imm12s
+* E039-niii  MULQ Rn, imm12s
+* E03A-niii  ANDQ Rn, imm12
+* E03B-niii  ORQ Rn, imm12
+* E03C-niii  XORQ Rn, imm12
+** Rn=Rn op imm
+
+* E03D-eenm  MOV2 Rn, Rm		//Extended MOV
+** ee: tttt-nnmm
+** tttt:
+*** 0000: RnL/RnH, RmL/RmH
+*** 0001: RnL/RnH, FmL/FmH
+*** 0010: Rn, XmL/XmH
+*** 0011: ?
+*** 0100: FnL/FnH, RmL/RmH
+*** 0101: FnL/FnH, FmL/FmH
+*** 011x: ?
+*** 1000: XnL/XnH, Rm
+*** 1001: ?
+*** 1010: XnL/XnH, XmL/XmH
+*** 1011: Xn, Xm
+*** 11xx: ?
+
+* E03E-nmii  MOVV Fn, (Rm, disp8s)	//!32, Load Vector
+* E03F-nmii  MOVV (Rn, disp8s), Fm	//!32, Store Vector
+
+* E04n-0ddd  LDSPQ Rn, disp12		//Load Rn from (SP+disp*8)
+* E04m-1ddd  STSPQ disp12, Rn		//Store Rn to (SP+disp*8)
+* E04n-2ddd  LDSPF Fn, disp12		//Load Fn from (SP+disp*8)
+* E04m-3ddd  STSPF disp12, Fn		//Store Fn to (SP+disp*8)
+** Load or Store to/from stack variable.
+* E04n-4ddd  LEASP Rn, disp12		//Load Address of (SP+disp*8) into Rn
+* E04n-5ddd  ?
+* E04n-6ddd  LDSPV Rn, disp12		//Load Vector 
+* E04m-7ddd  STSPV disp12, Rm		//Store Vector
+
+
+* E1ni-iiii  LDC20I Rn, imm20s
+** Load 20-bit sign-extended constant.
+
+* E2nm-0ddd  MOVB Rn, (Rm, disp12s)
+* E2nm-1ddd  MOVW Rn, (Rm, disp12s)
+* E2nm-2ddd  MOVI Rn, (Rm, disp12s)
+* E2nm-3ddd  MOVQ Rn, (Rm, disp12s)
+* E2nm-4ddd  MOVB (Rn, disp12s), Rm
+* E2nm-5ddd  MOVW (Rn, disp12s), Rm
+* E2nm-6ddd  MOVI (Rn, disp12s), Rm
+* E2nm-7ddd  MOVQ (Rn, disp12s), Rm
+* E2nm-8ddd  MOVF Fn, (Rm, disp12s)		//Load Float
+* E2nm-9ddd  MOVD Fn, (Rm, disp12s)		//Load Double
+* E2nm-Addd  MOVF (Rn, disp12s), Fm		//Store Float
+* E2nm-Bddd  MOVD (Rn, disp12s), Fm		//Store Double
+* E2nm-Cddd  LEAB Rn, (Rm, disp12s)		//Rn=Rm+disp12s
+* E2nm-Dddd  LEAW Rn, (Rm, disp12s)		//Rn=Rm+disp12s*2
+* E2nm-Eddd  LEAI Rn, (Rm, disp12s)		//Rn=Rm+disp12s*4
+* E2nm-Fddd  LEAQ Rn, (Rm, disp12s)		//Rn=Rm+disp12s*8
+
+* E3ed-dddd  BRr disp21
+** E30d-dddd  LDCT disp21s
+*** Load Constant Table Register (PC+(disp+1)*8, aligned to 64 bits).
+** E32d-dddd  BRA disp21s
+*** Branch (disp*2)
+** E34d-dddd  BSR disp21s
+*** Call (disp*2)
+** E36d-dddd  LDOT disp21s
+*** Load Offset Table Register (PC+(disp+1)*8, aligned to 64 bits).
+** E38d-dddd  BRT disp21s
+** E3Ad-dddd  BRF disp21s
+*** Branch If true/false (disp*2)
+** E3Cd-dddd  ?
+** E3Ed-dddd  ?
+
+
+=== Opcodes, 64-bit Forms (Possible) ===
+
+* FCxx-xxxx-xxxx-xxxx: 64 bit
+* FDxx-xxxx-xxxx-xxxx: 64 bit
+* FExx-xxxx-xxxx-xxxx: 64 bit
+* FFxx-xxxx-xxxx-xxxx: 64 bit
+
+* FF0n-iiii-iiii-iiii  MOVI48 Rn, imm
+* FF10-0dst-iiii-iiii  MOVB Rd, (Rs, Rt, imm32)
+* FF10-1dst-iiii-iiii  MOVW Rd, (Rs, Rt, imm32)
+* FF10-2dst-iiii-iiii  MOVI Rd, (Rs, Rt, imm32)
+* FF10-3dst-iiii-iiii  MOVQ Rd, (Rs, Rt, imm32)
+* FF10-4dst-iiii-iiii  MOVB (Rd, Rs, imm32), Rt
+* FF10-5dst-iiii-iiii  MOVW (Rd, Rs, imm32), Rt
+* FF10-6dst-iiii-iiii  MOVI (Rd, Rs, imm32), Rt
+* FF10-7dst-iiii-iiii  MOVQ (Rd, Rs, imm32), Rt
+* FF10-8dst-iiii-iiii  MOVF Rd, (Rs, Rt, imm32)
+* FF10-9dst-iiii-iiii  MOVD Rd, (Rs, Rt, imm32)
+* FF10-Adst-iiii-iiii  MOVF (Rd, Rs, imm32), Rt
+* FF10-Bdst-iiii-iiii  MOVD (Rd, Rs, imm32), Rt
+* FF10-Cdst-iiii-iiii  MOVV Rd, (Rs, Rt, imm32)
+* FF10-Ddst-iiii-iiii  MOVV (Rd, Rs, imm32), Rt
+* FF10-E0nm-iiii-iiii  MOVB Rn, (Rm, imm32)
+* FF10-E1nm-iiii-iiii  MOVW Rn, (Rm, imm32)
+* FF10-E2nm-iiii-iiii  MOVI Rn, (Rm, imm32)
+* FF10-E3nm-iiii-iiii  MOVQ Rn, (Rm, imm32)
+* FF10-E4nm-iiii-iiii  MOVB (Rn, imm32), Rm
+* FF10-E5nm-iiii-iiii  MOVW (Rn, imm32), Rm
+* FF10-E6nm-iiii-iiii  MOVI (Rn, imm32), Rm
+* FF10-E7nm-iiii-iiii  MOVQ (Rn, imm32), Rm
+* FF10-E8nm-iiii-iiii  MOVF Rn, (Rm, imm32)
+* FF10-E9nm-iiii-iiii  MOVD Rn, (Rm, imm32)
+* FF10-EAnm-iiii-iiii  MOVF (Rn, imm32), Rm
+* FF10-EBnm-iiii-iiii  MOVD (Rn, imm32), Rm
+* FF10-ECnm-iiii-iiii  MOVF Rn, (Rm, imm32)
+* FF10-EDnm-iiii-iiii  MOVF (Rn, imm32), Rm
+

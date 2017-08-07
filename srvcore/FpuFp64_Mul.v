@@ -28,6 +28,8 @@ reg[51:0] tFracC2;
 
 reg[63:0]	tDst;
 
+assign dst = tDst;
+
 always @ (clk && enable)
 begin
 	sgna=srca[63];
@@ -72,7 +74,7 @@ begin
 		tDst[51: 0]=tFracC2[51:0];
 	end
 	
-	dst=tDst;
+//	dst=tDst;
 end
 
 endmodule

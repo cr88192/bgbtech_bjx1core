@@ -56,38 +56,6 @@ CC15=R7_B
 
 */
 
-module GpReg(
-	clk,
-
-	isWrD,
-	isQwD,
-	idRegD,
-	dataD,
-
-	idReg1,
-	data1,
-
-	idReg2,
-	data2,
-
-	idReg3,
-	data3
-	);
-
-input clk;			//clock
-
-input isWrD;		//Is Write
-input isQwD;		//Is QuadWord
-input[6:0] idRegD;
-input[63:0] dataD;
-
-input[6:0] idReg1;
-input[6:0] idReg2;
-input[6:0] idReg3;
-
-output[63:0] data1;
-output[63:0] data2;
-output[63:0] data3;
 
 parameter[5:0] REGS_R0		= 6'h00;
 parameter[5:0] REGS_R15		= 6'h0F;
@@ -97,7 +65,7 @@ parameter[5:0] REGS_F15		= 6'h2F;
 parameter[5:0] REGS_F16		= 6'h30;
 parameter[5:0] REGS_F31		= 6'h3F;
 
-
+// parameter[5:0] REGS_PR		= 6'h12;
 // parameter[3:0] CREG_SR		= 4'h00;
 // parameter[3:0] CREG_PC		= 4'h0E;
 // parameter[4:0] CREG_LR		= 5'h01;
@@ -132,6 +100,40 @@ parameter[6:0] REG_IMM		= 7'h5E;
 parameter[6:0] REG_ZZR		= 7'h5F;
 
 
+module GpReg(
+	clk,
+
+	isWrD,
+	isQwD,
+	idRegD,
+	dataD,
+
+	idReg1,
+	data1,
+
+	idReg2,
+	data2,
+
+	idReg3,
+	data3
+	);
+
+input clk;			//clock
+
+input isWrD;		//Is Write
+input isQwD;		//Is QuadWord
+input[6:0] idRegD;
+input[63:0] dataD;
+
+input[6:0] idReg1;
+input[6:0] idReg2;
+input[6:0] idReg3;
+
+output[63:0] data1;
+output[63:0] data2;
+output[63:0] data3;
+
+
 reg[31:0] regs_lo[64];	//GPRs and FPRs
 reg[31:0] regs_hi[64];
 
@@ -140,6 +142,10 @@ reg[31:0] regs_hi[64];
 
 reg[31:0] creg_lo[16];	//Control Registers
 reg[31:0] creg_hi[16];
+
+reg[63:0] reg_pc;		//PC register, special
+reg[63:0] reg_pr;		//PR register, special
+reg[63:0] reg_sr;		//SR register, special
 
 // reg[6:0] tIdRegDLo;
 // reg[6:0] tIdRegDHi;

@@ -16,6 +16,7 @@ reg[11:0]		exb;
 // reg[52:0]		frb;
 
 reg[63:0]	tDst;
+assign dst = tDst;
 
 always @ (clk && enable)
 // always_ff
@@ -44,7 +45,7 @@ begin
 		tDst[28:0]=0;
 	end
 	
-	dst = tDst;
+//	dst = tDst;
 end
 
 endmodule

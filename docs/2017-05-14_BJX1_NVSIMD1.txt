@@ -1,5 +1,11 @@
 Redesign of the WVSIMD and NVSIMD Ideas.
-* Optional Extension of the BJX1 ISA [[SH-BJX1-ISA]]
+* Optional Extension of the BJX1 ISA [[BJX1-Core-ISA]]
+* If support is absent, Basic FPU is used.
+
+
+== Overview ==
+
+This is an optional extension to the BJX1 ISA.
 * Packed Byte, Word, Long, Float, Double
 * FPUL register may be extended to 64-bits as-needed.
 * SIMD Operations will optionally replace the FPU instructions.
@@ -31,7 +37,9 @@ Registers (VE=1):
 ** DR2=FR2,FR3
 ** DR3=XF2,XF3 (Alias to XD2)
 * (Drop) DX0..DX15: Will consist of the pairs (FRn,XFn).
-** FR will only effect 32-bit float operations.
+** (Drop) FR will only effect 32-bit float operations.
+* FR will swap Bank A and B.
+** Maybe also C and D?
 * XR0..XR15: Paired registers will be 128 bit (FR0,FR1,XF0,XF1)
 ** XR0=FR0,FR1,XF0,XF1
 ** XR1=YF0,YF1,ZF0,ZF1
@@ -252,6 +260,12 @@ Notation:
 * FV: Operation specific to floating point vectors
 
 
+== Instruction Coding ==
+
+General:
+* Shares the same opcode space and registers as Basic FPU.
+
+
 === Instructions (16-bit I-Forms) ===
 
 Instructions
@@ -342,7 +356,8 @@ Instructions
 ****			FCFD / FSCA			//
 ****			FDFD / FTRV2
 ****			FEFD / FSCA			//
-**	FnmE ? (Reserved Ops)
+**	FnmE FMAC FRm, FRn		//S, PR=0
+**  FnmE Reserved for extended ops (V or PR!=0)
 **	FooF ? (Escape 32 for FPU/SIMD Ops)
 
 
@@ -402,32 +417,21 @@ Instructions (Extended)
 ***		8Eii-FiDD PSETMD	//Packed Set Mode (Ext/Resv)
 ***		8Evv-FnED PDDPR		//Packed Dot Product
 ***		F-FD
-****			F0FD / FSCA			//Sin/Cos
-****			F1FD / FTRV2
-****			F2FD / FSCA			//
-****			F3FD FSCHG			//Flips FPSCR.SZ
-****			F4FD / FSCA			//
-****			F5FD / FTRV2
-****			F6FD / FSCA			//
-****			F7FD / FPCHG		//Flips FPSCR.PR
-****			F8FD / FSCA			//
-****			F9FD / FTRV2
-****			FAFD / FSCA			//
-****			FBFD / FRCHG		//Flips FPSCR.FR
-****			FCFD / FSCA			//
-****			FDFD / FTRV2
-****			FEFD / FSCA			//
-**	FnmE FMAC FRm, FRn
-**	FooF ? (Escape 32 for FPU/SIMD Ops)
-
-
-=== Instructions (Drop, 64-bit I-Forms) ===
-
-64-Bit I-Forms
-*	8EFn-8Em6-vodd-dddd PMOV.S @(Ro,Rm,disp24), FRn
-*	8EFn-8Em7-vodd-dddd PMOV.S FRm, @(Ro,Rn,disp24)
-*	8EFn-8Em8-vddd-dddd PMOV.S @(Rm,disp28), FRn
-* 	8EFn-8Em9-vddd-dddd PMOV.S -
-*	8EFn-8EmA-vddd-dddd PMOV.S FRm, @(Rn,disp28)
-* 	8EFn-8EmB-vddd-dddd PMOV.S -
+****			8Evv-F0FD -
+****			8Evv-F1FD -
+****			8Evv-F2FD -
+****			8Evv-F3FD -
+****			8Evv-F4FD -
+****			8Evv-F5FD -
+****			8Evv-F6FD -
+****			8Evv-F7FD -
+****			8Evv-F8FD -
+****			8Evv-F9FD -
+****			8Evv-FAFD -
+****			8Evv-FBFD -
+****			8Evv-FCFD -
+****			8Evv-FDFD -
+****			8Evv-FEFD -
+**	8Evv-FnmE -
+**	8Evv-FooF -
 

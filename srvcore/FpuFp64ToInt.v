@@ -21,7 +21,9 @@ reg[63:0]		frb;
 reg			sgn;
 reg[5:0]	tShl;
 reg[63:0]	tDst;
+reg[63:0]	tDst2;
 
+assign dst = tDst2;
 
 always @ (clk && enable)
 // always_ff
@@ -58,14 +60,14 @@ begin
 	if(is32)
 	begin
 		if(tDst[63:31]==33'h1_FFFF_FFFF)
-			dst=tDst;
+			tDst2=tDst;
 		else if(tDst[63:31]==33'h0_0000_0000)
-			dst=tDst;
+			tDst2=tDst;
 		else
-			dst=64'h0000_00000_8000_0000;
+			tDst2=64'h0000_00000_8000_0000;
 	end
 	else
-		dst=tDst;
+		tDst2=tDst;
 end
 
 endmodule

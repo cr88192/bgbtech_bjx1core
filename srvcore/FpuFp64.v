@@ -1,11 +1,11 @@
-`include "FpuFp64_Add.v"
-`include "FpuFp64_Mul.v"
-`include "FpuFp64_Rcp.v"
-`include "FpuFp32To64.v"
-`include "FpuFp64To32.v"
+// `include "FpuFp64_Add.v"
+// `include "FpuFp64_Mul.v"
+// `include "FpuFp64_Rcp.v"
+// `include "FpuFp32To64.v"
+// `include "FpuFp64To32.v"
 
-`include "FpuFp64ToInt.v"
-`include "FpuFp64FromInt.v"
+// `include "FpuFp64ToInt.v"
+// `include "FpuFp64FromInt.v"
 
 module FpuFp64(
 	/* verilator lint_off UNUSED */
@@ -48,43 +48,44 @@ parameter[3:0] OP_CNVIS		= 4'h0F;
 
 reg fpaIsEn;
 
-reg fpaIsSub;
-reg[63:0] fpaDst;
+wire[63:0] fcSrcA;
+wire[63:0] fcSrcB;
+
+wire fpaIsSub;
+wire[63:0] fpaDst;
 FpuFp64_Add fpadd(clk, fpaIsEn, fpaIsSub, fcSrcA, fcSrcB, fpaDst);
 
-reg[63:0] fpmSrcB;
-reg[63:0] fpmDst;
+wire[63:0] fpmSrcB;
+wire[63:0] fpmDst;
 FpuFp64_Mul fpmul(clk, fpaIsEn, fcSrcA, fpmSrcB, fpmDst);
 
-reg[63:0] fpRcpDst;
+wire[63:0] fpRcpDst;
 FpuFp64_Rcp fprcp(clk, fcSrcB, fpRcpDst);
 
 assign fpaIsSub = (opMode==OP_SUB);
 assign fpmSrcB = (opMode==OP_DIV) ? fpRcpDst : fcSrcB;
 
 
-reg tOpFp32i;
-reg tOpFp32o;
-
-reg[63:0] fcSrcA;
-reg[63:0] fcSrcB;
+wire tOpFp32i;
+wire tOpFp32o;
 
 reg fpCnvEn;
-reg[63:0] fpCnvaDst;
-reg[63:0] fpCnvbDst;
+wire[63:0] fpCnvaDst;
+wire[63:0] fpCnvbDst;
 FpuFp32To64 fpcnva(clk, fpCnvEn, srca[31:0], fpCnvaDst);
 FpuFp32To64 fpcnvb(clk, fpCnvEn, srcb[31:0], fpCnvbDst);
 
 reg fpCnvifEn;
-reg[63:0] fpCnvbDstI;
-reg[63:0] fpCnvbDstF;
+wire[63:0] fpCnvbDstI;
+wire[63:0] fpCnvbDstF;
 FpuFp64ToInt cnv2si1(clk, fpCnvifEn, opf32, fcSrcB, fpCnvbDstI);
 FpuFp64FromInt cnv2is1(clk, fpCnvifEn, opf32, srcb, fpCnvbDstF);
 
 reg[63:0]	tDst;
-reg[63:0]	tDst2;
+wire[63:0]	tDst2;
+reg[3:0]	tSro;
 
-reg[63:0] fpCnvcDst;
+wire[63:0] fpCnvcDst;
 FpuFp64To32 fpcnvc(clk, fpCnvEn, tDst, fpCnvcDst[31:0]);
 assign 	fpCnvcDst[63:32]=0;
 
@@ -95,9 +96,10 @@ assign fcSrcB = tOpFp32i ? fpCnvbDst : srcb;
 
 assign	tDst2 = tOpFp32o ? fpCnvcDst : tDst;
 assign	dst = tDst2;
+assign sro = tSro;
 
-// always @ (opMode) begin
-always_ff begin
+always @ (opMode) begin
+// always_ff begin
 
 //	fpCnvcDst[63:32]=0;
 //	fpmSrcB = srcb;
@@ -105,7 +107,8 @@ always_ff begin
 	fpCnvEn = opf32;
 	fpCnvifEn = 0;
 	fpaIsEn = 0;
-	sro = sri;
+	tSro = sri;
+	tDst = fcSrcB;
 
 	case(opMode)
 		OP_NONE: begin
@@ -151,7 +154,7 @@ always_ff begin
 		end
 
 		OP_CMPEQ: begin
-			sro[0] = (fcSrcA == fcSrcB);
+			tSro[0] = (fcSrcA == fcSrcB);
 		end
 
 		OP_CMPGT: begin
@@ -159,22 +162,22 @@ always_ff begin
 			begin
 				if(fcSrcB[63])
 				begin
-					sro[0] = (fcSrcA[62:0] < fcSrcB[62:0]);
+					tSro[0] = (fcSrcA[62:0] < fcSrcB[62:0]);
 				end
 				else
 				begin
-					sro[0] = 0;
+					tSro[0] = 0;
 				end
 			end
 			else
 			begin
 				if(!fcSrcB[63])
 				begin
-					sro[0] = (fcSrcA[62:0] > fcSrcB[62:0]);
+					tSro[0] = (fcSrcA[62:0] > fcSrcB[62:0]);
 				end
 				else
 				begin
-					sro[0] = 1;
+					tSro[0] = 1;
 				end
 			end
 		end

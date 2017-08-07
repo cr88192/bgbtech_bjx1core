@@ -1,8 +1,10 @@
 ISA:
 * This is a working spec for an extended version of the SH ISA.
-** This is based mostly on SH4.
+** This is based mostly on SH4 (Hitachi SuperH)
 * Details here are subject to change without warning.
 
+
+== Overview ==
 
 === Registers ===
 
@@ -746,7 +748,7 @@ PSETMD 12-bit
 ** This group of instructions is not present in BJX1.
 
 
-=== XPFX0 ===
+=== XPFX0: General 32-bit I-Forms ===
 
 For XPFX0 I-Forms
 * The prefix will give the high bits of multi-part immediates for 32-bit I-Forms.
@@ -904,7 +906,7 @@ XPFX0/Escape32 I-Forms
 **		8EEd-Dndd MOV.Q @(PC,disp13), RQn	//disp*4, Load QWord
 
 *	8Eii-Enii MOV./Q #imm16, Rn
-*	8Eoo-Fooo (Ext-FPU / SIMD)
+*	8Exx-Fxxx (Ext-FPU / SIMD)
 
 
 === XPFX2-OPREX: Explicit Reg/Size Forms ===

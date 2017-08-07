@@ -20,6 +20,17 @@ reg[52:0]		frb;
 reg[52:0]		tFr2;
 reg[52:0]		tFr3;
 
+reg[63:0]		tDst;
+
+assign dst = tDst;
+
+reg[15:0]	rcpLut[255:0];
+
+initial begin
+	$readmemh("rcplut0.txt", rcpLut);
+end
+
+/*
 reg[15:0]	rcpLut[256]= '{
 16'h8000, 16'h7F80, 16'h7F01, 16'h7E84,
 16'h7E07, 16'h7D8C, 16'h7D11, 16'h7C97,
@@ -86,6 +97,7 @@ reg[15:0]	rcpLut[256]= '{
 16'h4104, 16'h40E3, 16'h40C2, 16'h40A1,
 16'h4081, 16'h4060, 16'h4040, 16'h4020
 };
+*/
 
 always @ (clk)
 begin
@@ -94,6 +106,8 @@ begin
 
 	fra[52]=0;
 	fra[51:0]=src[51:0];
+
+	tDst = 0;
 
 //	tFr2=(fra>>26)*(fra>>26);
 
@@ -121,16 +135,16 @@ begin
 	if(frb[52])
 	begin
 		exb=2046-exa;
-		dst[63]=src[63];
-		dst[62:52]=exb[10:0];
-		dst[51:0]=frb[51:0];
+		tDst[63]=src[63];
+		tDst[62:52]=exb[10:0];
+		tDst[51:0]=frb[51:0];
 	end
 	else
 	begin
 		exb=2045-exa;
-		dst[63]=src[63];
-		dst[62:52]=exb[10:0];
-		dst[51:1]=frb[50:0];
+		tDst[63]=src[63];
+		tDst[62:52]=exb[10:0];
+		tDst[51:1]=frb[50:0];
 	end
 end
 
