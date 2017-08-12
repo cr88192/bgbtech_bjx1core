@@ -1,0 +1,46 @@
+Boot ROM
+* Initially activated during hardware init.
+* Should boot an OS from external media.
+* Overlaps with functionality provided by the emulator.
+
+Limitations
+* A core may be limited to a single operating mode.
+* A core may be limited to a single endianess.
+* Boot is allowed to fail if the kernel doesn't match an expected configuration.
+** A core is allowed to support multiple configurations.
+** The presented profile in this case may depend on the boot image.
+
+
+Boot Process
+* ELF or PE/COFF
+* Located in an SDcard image.
+** SDcard will contain a FAT filesystem.
+** The FAT filesystem will contain "BOOTKERN.SYS"
+** BJX1-32 may boot either PE/COFF or ELF
+** BJX1-64 will boot a variant of PE32+
+
+Restrictions for PE image:
+* RVA=Offset
+* Static Linked
+* Falls within RAM
+
+PE Machine Id:
+* SH-3:   0x01A2  //Interpret as an SH2/J2 Compatible Mode
+* SH-4:   0x01A6  //Try to mimic an SH4
+* BJX1-32 0xB132
+* BJX1-64 0xB164
+
+
+HW Memory Map (40 bit)
+* 00_0C00_0000: Start of RAM (Low)
+* 00_1BFF_FFFF: End of RAM (Low)
+* 10_0000_0000: Start of RAM (High)
+* 9F_FFFF_FFFF: End of RAM (High)
+* A0_0000_0000: Start of MMIO (High)
+* DF_FFFF_FFFF: End of MMIO (High)
+
+The Low RAM Start will map to the same memory region as the High RAM Start.
+
+Some interrupts may go directly into the Boot ROM, and as such may not be user trappable.
+
+This will include Reset, and certain emulated instructions.

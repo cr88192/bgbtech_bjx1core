@@ -128,9 +128,11 @@ parameter[7:0] UOP_FCNVID	= 8'h5F;
 
 `include "ArithAlu.v"
 `include "MemAlu.v"
-`include "FpuFp64.v"
+// `include "FpuFp64.v"
+`include "FpuFp64B.v"
 `include "GpReg.v"
-`include "MemTile.v"
+// `include "MemTile.v"
+`include "MemTile2.v"
 `include "DecOp.v"
 
 /*
@@ -146,10 +148,23 @@ module ExUop(
 	);
 */
 
-module ExUop(clk, reset);
+module ExUop(clk, reset,
+	
+	extAddr,
+	extData,
+	extOE,
+	extWR,
+	extNotReady);
 
 input clk;			//clock
 input reset;		//reset
+
+/* External Memory */
+output[47:0] extAddr;			//external memory address
+inout[31:0] extData;			//external memory data (read/write)
+output extOE;					//external output enable
+output extWR;					//external write
+input extNotReady;				//external access is not ready
 
 /*
 input[31:0] idInstWord;	//source instruction word
@@ -161,6 +176,7 @@ input[6:0] idRegS;	//Source Opcode S (or M)
 input[6:0] idRegT;	//Source Opcode T
 input[31:0] idImm;	//Source Immediate
 */
+
 
 reg[31:0]	uopWord;		//uop word
 reg[31:0]	uopNextWord;	//uop word
@@ -242,7 +258,9 @@ reg fpuOpFp32;
 reg[3:0] fpuCmd;
 reg[3:0] tFpuSr;
 reg[63:0] fpuDataD;
-FpuFp64 fpu1(clk, fpuOpFp32, fpuCmd, iDataS, iDataT, fpuDataD,
+//FpuFp64 fpu1(clk, fpuOpFp32, fpuCmd, iDataS, iDataT, fpuDataD,
+//	regSr[3:0], tFpuSr);
+FpuFp64B fpu1(clk, fpuOpFp32, fpuCmd, iDataS, iDataT, iDataD, fpuDataD,
 	regSr[3:0], tFpuSr);
 
 /* Data Memory */
@@ -250,20 +268,41 @@ reg			memRd;
 reg			memWr;
 reg[2:0]	memCmd;
 reg[47:0]	memAddr;
+
+/* verilator lint_off UNOPTFLAT */
 reg[63:0]	memRdValue;
+/* verilator lint_off UNOPTFLAT */
 reg[63:0]	memWrValue;
-MemTile mem1(clk, memRd, memWr, memCmd,
-	memAddr, memRdValue, memWrValue);
+
+// MemTile mem1(clk, memRd, memWr, memCmd,
+//	memAddr, memRdValue, memWrValue);
 
 /* Instruction Memory */
+/*
 reg			imemRd;
 reg			imemWr;
 reg[2:0]	imemCmd;
 reg[47:0]	imemAddr;
-reg[63:0]	imemRdValue;
+wire[63:0]	imemRdValue;
 reg[63:0]	imemWrValue;
 MemTile imem1(clk, imemRd, imemWr, imemCmd,
 	imemAddr, imemRdValue, imemWrValue);
+*/
+
+
+reg			imemRd;
+reg[47:0]	imemAddr;
+wire[63:0]	imemRdValue;
+wire memHold;
+
+// /*
+MemTile2 mem1(clk, reset,
+	memRd, memWr, memCmd,
+	memAddr, memRdValue, memWrValue,
+	imemRd, imemAddr, imemRdValue,
+	extAddr, extData, extOE, extWR,
+	memHold, extNotReady);
+// */
 
 reg[1:0] idStepPc;
 DecOp dec1(clk, idInstWord, regSr[31:0],
@@ -274,6 +313,10 @@ reg[11:0]	uopPc;
 reg[11:0]	uopNextPc;
 reg			uopPcLive;
 
+assign	regPc=regs.reg_pc;
+assign	regPr=regs.reg_pr;
+assign	regSr=regs.reg_sr;
+
 always @ (clk)
 begin
 	/* Common */
@@ -282,26 +325,29 @@ begin
 //	regSr[31: 0]=regs.creg_lo[regs.CREG_SR];
 //	regSr[63:32]=regs.creg_hi[regs.CREG_SR];
 
-	regPc=regs.reg_pc;
-	regPr=regs.reg_pr;
-	regSr=regs.reg_sr;
+//	regPc=regs.reg_pc;
+//	regPr=regs.reg_pr;
+//	regSr=regs.reg_sr;
 
 	/* Stage 1: Fetch */
+	imemAddr[47:0]=regPc[47:0];
+	imemRd=!uopPcLive;
+
 	if(!uopPcLive)
 	begin
-		imemAddr[47:0]=regPc[47:0];
-		imemCmd=mem1.MD_DWORD;
-		imemRd=1'b1;
-		imemWr=1'b0;
+//		imemAddr[47:0]=regPc[47:0];
+//		imemCmd=mem1.MD_DWORD;
+//		imemRd=1'b1;
+//		imemWr=1'b0;
 		idNextInstWord=imemRdValue[31:0];
 	end
 	else
 	begin
-		imemAddr[47:0]=48'h0;
-		imemCmd=mem1.MD_NONE;
-		imemRd=1'b0;
-		imemWr=1'b0;
-		imemWrValue=0;
+//		imemAddr[47:0]=48'h0;
+//		imemCmd=mem1.MD_NONE;
+//		imemRd=1'b0;
+//		imemWr=1'b0;
+//		imemWrValue=0;
 		idNextInstWord=idInstWord;
 	end
 
@@ -328,13 +374,13 @@ begin
 	
 	if(uopWord[23])
 	begin
-		uopPcLive=0;
+//		uopPcLive=0;
 	end
 	else
 	begin
 		uopNextPc=uopPc+1;
 		uopNextWord=dec1.uopPgm[uopNextPc];
-		uopPcLive=1;
+//		uopPcLive=1;
 	end
 	uopCmd=uopWord[31:24];
 
@@ -638,7 +684,10 @@ begin
 
 				4'h3:
 					begin end		//BRK
+				default: begin end
 				endcase
+			default: begin end
+			endcase
 		default: begin
 		end
 		endcase
@@ -654,13 +703,12 @@ begin
 //	regs.sreg_lo[regs.SREG_PC] <= regNextPc[31: 0];
 //	regs.sreg_hi[regs.SREG_PC] <= regNextPc[63:32];
 
-//	regSr      <= regNextSr;
-//	regPc      <= regNextPc;
-//	regPr      <= regNextPc;
-
+//	regSr       <= regNextSr;
+//	regPc       <= regNextPc;
+//	regPr       <= regNextPr;
 	regs.reg_sr <= regNextSr;
 	regs.reg_pc <= regNextPc;
-	regs.reg_pr <= regNextPc;
+	regs.reg_pr <= regNextPr;
 
 
 	/* Stage 1->2 */
@@ -675,6 +723,7 @@ begin
 	/* Stage 3+0 */
 	uopPc      <= uopNextPc;
 	uopWord    <= uopNextWord;
+	uopPcLive  <= !uopNextWord[23];
 
 	/* Stage 3+1 */
 	oData2D    <= tData2D;

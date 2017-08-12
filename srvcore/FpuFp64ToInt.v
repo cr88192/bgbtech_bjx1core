@@ -49,12 +49,12 @@ begin
 	if(exa>=1075)
 	begin
 		tShl[5:0]=exb[5:0];
-		tDst=fra>>>tShl;
+		tDst=fra<<tShl;
 	end
 	else
 	begin
 		tShl[5:0]=-exb[5:0];
-		tDst=fra<<tShl;
+		tDst=fra>>>tShl;
 	end
 	
 	if(is32)

@@ -47,6 +47,7 @@ reg opIs32p;
 reg[6:0] tIdRegD;
 reg[6:0] tIdRegS;
 reg[6:0] tIdRegT;
+reg[31:0] tIdImm;
 
 always @ (clk)
 begin
@@ -63,7 +64,7 @@ begin
 	tIdRegD[6:0]=0;
 	tIdRegS[6:0]=0;
 	tIdRegT[6:0]=0;
-	idImm[31:0]=32'h0;
+	tIdImm[31:0]=32'h0;
 	idStepPc=opIs32p ? 2'h2 : 2'h1;
 
 	idUopPc[11:0]=12'h0;
@@ -142,7 +143,7 @@ begin
 		tIdRegD[3:0]=istrWord[ 7:4];
 		tIdRegS[3:0]=istrWord[11:8];
 		tIdRegT=REG_ZZR;
-		tIdImm[3:0]=istrWord[3:0]
+		tIdImm[3:0]=istrWord[3:0];
 		idUopWord[31:24]=UOP_MOVSTI;
 	end
 	
@@ -205,7 +206,7 @@ begin
 		tIdRegD[3:0]=istrWord[11:8];
 		tIdRegS[3:0]=istrWord[ 7:4];
 		tIdRegT=REG_ZZR;
-		tIdImm[3:0]=istrWord[3:0]
+		tIdImm[3:0]=istrWord[3:0];
 		idUopWord[31:24]=UOP_MOVLDI;
 	end
 
@@ -241,7 +242,7 @@ begin
 		tIdRegS[3:0]=istrWord[11:8];
 		tIdRegT[6:0]=REG_IMM;
 		tIdImm[31:8]=istrWord[7] ? 24'hFFFFFF : 24'h000000 ;
-		tIdImm[ 7:0]=istrWord[7:0]
+		tIdImm[ 7:0]=istrWord[7:0];
 		idUopWord[31:24]=srIsDq?UOP_ADDQ:UOP_ADDI;
 	end
 	
@@ -251,7 +252,7 @@ begin
 		tIdRegS=REG_ZZR;
 		tIdRegT=REG_IMM;
 		tIdImm[31:12]=istrWord[7] ? 20'hFFFFF : 20'h00000 ;
-		tIdImm[11:0]=istrWord[11:0]
+		tIdImm[11:0]=istrWord[11:0];
 		idUopWord[31:24]=UOP_JMP;
 	end
 
@@ -260,8 +261,8 @@ begin
 		tIdRegD=REG_ZZR;
 		tIdRegS=REG_ZZR;
 		tIdRegT=REG_IMM;
-		tIdImm[31:12]=istrWord[7] ? 20'hFFFFF : 24'h00000 ;
-		tIdImm[11:0]=istrWord[11:0]
+		tIdImm[31:12]=istrWord[7] ? 20'hFFFFF : 20'h00000 ;
+		tIdImm[11:0]=istrWord[11:0];
 		idUopWord[31:24]=UOP_JSR;
 	end
 
@@ -272,17 +273,17 @@ begin
 		tIdRegS=REG_IMM;
 		tIdRegT=REG_IMM;
 		tIdImm[31:8]=istrWord[7] ? 24'hFFFFFF : 24'h000000 ;
-		tIdImm[ 7:0]=istrWord[7:0]
+		tIdImm[ 7:0]=istrWord[7:0];
 		idUopWord[31:24]=srIsDq?UOP_MOVQ:UOP_MOVI;
 	end
 	
 
 	default:
 	begin
-		idRegD[6:0]=7'h7F;
-		idRegS[6:0]=7'h7F;
-		idRegT[6:0]=7'h7F;
-		idImm[31:0]=32'h0;
+		tIdRegD[6:0]=7'h7F;
+		tIdRegS[6:0]=7'h7F;
+		tIdRegT[6:0]=7'h7F;
+		tIdImm[31:0]=32'h0;
 		idStepPc=2'h1;
 	end
 	endcase
@@ -299,6 +300,7 @@ begin
 		((regCurSr[29] && (tIdRegS[6:3]==4'h0)) ? 7'h58 : 7'h00);
 	idRegT=tIdRegT ^
 		((regCurSr[29] && (tIdRegT[6:3]==4'h0)) ? 7'h58 : 7'h00);
+	idImm=tIdImm;
 
 //	idRegD=tIdRegD;
 //	idRegS=tIdRegS;

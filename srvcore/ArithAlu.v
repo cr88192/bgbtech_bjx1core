@@ -37,6 +37,8 @@ parameter[3:0] UOP_CMPHI	= 4'h0F;
 
 // reg[63:0]	tSrcaQ;
 // reg[63:0]	tSrcbQ;
+
+/* verilator lint_off UNOPTFLAT */
 reg[63:0]	tDstQ;
 
 // reg[31:0]	tDst;
