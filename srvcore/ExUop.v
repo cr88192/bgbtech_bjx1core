@@ -267,7 +267,8 @@ FpuFp64B fpu1(clk, fpuOpFp32, fpuCmd, iDataS, iDataT, iDataD, fpuDataD,
 reg			memRd;
 reg			memWr;
 reg[2:0]	memCmd;
-reg[47:0]	memAddr;
+// reg[47:0]	memAddr;
+reg[63:0]	memAddr;
 
 /* verilator lint_off UNOPTFLAT */
 reg[63:0]	memRdValue;
@@ -544,7 +545,8 @@ begin
 					aguCmd=uopCmd[2:0];
 
 				memCmd=uopCmd[2:0];
-				memAddr=tDataAguD[47:0];
+//				memAddr=tDataAguD[47:0];
+				memAddr=tDataAguD[63:0];
 				tIsWr2D=uopCmd[3];
 				tIsQw2D=uopCmd[2];
 

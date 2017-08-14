@@ -3,6 +3,11 @@ Memory Tile Interface
 
 Keeps a Code and Data buffer.
 May attempt to perform external IO if address isn't in cache.
+
+Address Bits
+  47: 0, Memory Address
+  59:48, Reserved
+     60, Disable Caching
 */
 
 module MemTile2(
@@ -36,7 +41,7 @@ input reset;		//reset
 input opRd;			//read value
 input opWr;			//write value
 input[2:0] opMode;
-input[47:0] memAddr;
+input[63:0] memAddr;
 input[63:0] wrValue;
 
 output[63:0] rdValue;
@@ -110,6 +115,12 @@ reg[6:0] reqLdTileIdx;		//requested tile to be read into
 reg reqLdTile;				//loading a tile requested
 reg reqLdITile;				//request is for an instruction tile
 reg reqLdSTile;				//request save old tile
+reg reqStTile;				//store a tile requested
+
+reg reqSyncTile;
+reg reqNextSyncTile;
+reg[6:0] reqSyncTileIdx;		//requested tile to be read into
+reg[6:0] reqNextSyncTileIdx;	//requested tile to be read into
 
 //assign extHold = reqLdTile || ldTileAct || resetAct;
 assign extHold = reqLdTile || ldTileAct || ldTileDlyAct || resetAct;
@@ -125,10 +136,13 @@ begin
 	iTileMiss2 = 0;
 
 	reqLdTile = 0;
+	reqStTile = 0;
+	reqNextSyncTile = 0;
+	reqNextSyncTileIdx = 0;
 	
 	if(opRd || opWr)
 	begin
-		dMemAddr    = memAddr;
+		dMemAddr    = memAddr[47:0];
 		dMemAddrLim = dMemAddr+15;
 		dTileIdx    = dMemAddr[12:2];
 		dTileLimIdx = dMemAddrLim[12:2];
@@ -136,6 +150,12 @@ begin
 		dTileMiss  = (dTileBase[dTileIdx[10:4]]!=dMemAddr[37:6]);
 		dTileMiss2 = (dTileBase[dTileLimIdx[10:4]]!=dMemAddrLim[37:6]);
 //		dTileMiss2 = 0;
+
+		if(opRd && memAddr[60] && !ldTileDlyAct && !ldTileLastAct)
+		begin
+			dTileMiss  = 1;
+//			dTileMiss2 = (dTileBase[dTileLimIdx[10:4]]!=dMemAddrLim[37:6]);
+		end
 
 		rdtShl[4:3] = memAddr[1:0];
 		rdtShl[2:0] = 3'b000;
@@ -169,6 +189,26 @@ begin
 //			reqLdSTile             = dTileBaseHi[dTileLimIdx[10:4]][10];
 			reqLdSTile             = dTileBaseDty[dTileLimIdx[10:4]];
 		end
+		
+		if(!dTileMiss && !dTileMiss2)
+		begin
+			if(reqSyncTile)
+			begin
+				reqStTile              = 1;
+				reqLdTileBaseLo        = dTileBase[reqSyncTileIdx];
+				reqLdTileBaseHi[ 9: 0] = dTileBaseHi[reqSyncTileIdx];
+	//			reqLdTileBaseHi[15:10] = 0;
+				reqLdTileIdx           = reqSyncTileIdx;
+				reqLdITile             = 0;
+			end
+			
+			if(opWr && (memAddr[60]!=memAddr[63]))
+			begin
+				reqNextSyncTile = 1;
+				reqNextSyncTileIdx = dTileIdx[10: 4];
+			end
+		end
+		
 	end
 // end
 
@@ -177,7 +217,7 @@ begin
 	
 	if(iopRd)
 	begin
-		iMemAddr    = imemAddr;
+		iMemAddr    = imemAddr[47:0];
 		iMemAddrLim = iMemAddr+7;
 		iTileIdx    = iMemAddr[12:2];
 		iTileLimIdx = iMemAddrLim[12:2];
@@ -229,6 +269,9 @@ reg ldTileNextStAct;
 reg ldTileDlyAct;
 reg ldTileNextDlyAct;
 
+reg ldTileLastAct;
+reg ldTileNextLastAct;
+
 reg ldTileDn;
 reg ldTileNextDn;
 
@@ -242,11 +285,12 @@ assign extOE   = ldTileExtOE;
 assign extWR   = ldTileExtWR;
 assign extAddr = ldTileExtAddr;
 
-always @ (reqLdTile or ldTileAct)
+always @ (reqLdTile or ldTileAct or reqStTile)
 begin
 	ldTileNextDlyAct = ldTileAct;
+	ldTileNextLastAct = ldTileDlyAct;
 
-	if(reqLdTile || ldTileAct)
+	if(reqLdTile || reqStTile || ldTileAct)
 	begin	
 		if(ldTileAct==0)
 		begin
@@ -260,7 +304,7 @@ begin
 			ldTileIdx[10:4]=reqLdTileIdx[6:0];
 			ldTileIdx[ 3:0]=ldTileWIdx;
 			
-			if(reqLdSTile)
+			if(reqLdSTile || reqStTile)
 			begin
 //				$display("ldTileNextWIdx: Store");
 				ldTileNextStAct = 1;
@@ -315,15 +359,27 @@ begin
 				begin
 					if(ldTileStAct)
 					begin
-//						$display("ldTileNextWIdx: Store->Load");
-						ldTileNextAct   = 1;
-						ldTileNextStAct = 0;
-						ldTileNextDn    = 0;
-						ldTileNextExtOE = 1;
-						ldTileNextExtWR = 0;
+						if(reqLdTile)
+						begin
+	//						$display("ldTileNextWIdx: Store->Load");
+							ldTileNextAct   = 1;
+							ldTileNextStAct = 0;
+							ldTileNextDn    = 0;
+							ldTileNextExtOE = 1;
+							ldTileNextExtWR = 0;
 
-						ldTileExtAddr[47:38] = reqLdTileBaseHi[9:0];
-						ldTileExtAddr[37: 6] = reqLdTileBaseLo[31:0];
+							ldTileExtAddr[47:38] = reqLdTileBaseHi[9:0];
+							ldTileExtAddr[37: 6] = reqLdTileBaseLo[31:0];
+						end
+						else
+						begin
+	//						$display("ldTileNextWIdx: Done");
+							ldTileNextAct   = 1;
+							ldTileNextStAct = 0;
+							ldTileNextDn    = 1;
+							ldTileNextExtOE = 0;
+							ldTileNextExtWR = 0;
+						end
 					end
 					else
 					begin
@@ -382,6 +438,11 @@ begin
 		ldTileDn      <= ldTileNextDn;
 		ldTileExtOE   <= ldTileNextExtOE;
 		ldTileExtWR   <= ldTileNextExtWR;
+
+		reqSyncTile    <= reqNextSyncTile;
+		reqSyncTileIdx <= reqNextSyncTileIdx;
+
+		ldTileLastAct <= ldTileNextLastAct;
 
 		if(dTileOpWrOK && (!ldTileAct || ldTileDn))
 //		if(dTileOpWrOK && !ldTileAct)
