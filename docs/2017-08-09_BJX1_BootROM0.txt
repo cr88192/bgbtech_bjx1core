@@ -44,3 +44,21 @@ The Low RAM Start will map to the same memory region as the High RAM Start.
 Some interrupts may go directly into the Boot ROM, and as such may not be user trappable.
 
 This will include Reset, and certain emulated instructions.
+
+
+=== ROM API ===
+
+ROM will use a VTable-based API.
+
+ struct BJX1_BootRomApi_s {
+ void *resv0;	//00, Reserved
+ void *resv1;	//08, Reserved
+ void *resv2;	//10, Reserved
+ void *resv3;	//18, Reserved
+ void *(*GetApi)(BJX1_BootRomApi **self, EIGHTCC apId);
+ //...
+ };
+
+GetApi will get an interface object for a specific API.
+May return NULL if the API is unrecognized.
+
