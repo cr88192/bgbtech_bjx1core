@@ -20,4 +20,8 @@ randbits.txt
 *.vhd
 *.hd
 
+*.tga
+*.png
+*.jpg
+
 srvcore/obj_dir/*
