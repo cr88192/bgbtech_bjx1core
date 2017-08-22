@@ -439,12 +439,14 @@ int cdec_decode0y(cdec_imgbuf *ctx)
 	ctx->xpos++;
 	if(ctx->xpos>=CDEC_LINE_RAWXMAX)
 	{
+		printf("CDEC_LINE_RAWXMAX\n");
 		ctx->xpos=0;
 		ctx->ypos+=2;
 	}
 	
 	if(ctx->ypos>=CDEC_LINE_RAWYMAX)
 	{
+		printf("CDEC_LINE_RAWYMAX\n");
 		ctx->ypos=!(ctx->ypos&1);
 	}
 

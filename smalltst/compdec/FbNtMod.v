@@ -1,9 +1,16 @@
-module FbNtMod(clock, reset, pwmout);
+module FbNtMod(clock, reset, pwmOut,
+	busAddr, busData, busOE, busWR, busHold);
 
 input clock;
 input reset;
 
 output pwmOut;
+
+input[39:0] busAddr;
+inout[31:0] busData;
+input busOE;
+input busWR;
+output busHold;
 
 reg[7:0]	cbPwmTab[32];
 
@@ -28,8 +35,8 @@ reg[2:0]	tVSyncNextClk;
 reg[2:0]	tVEqPulseClk;
 reg[2:0]	tVEqPulseNextClk;
 
-reg[2:0]	tPhaseCu;
-reg[2:0]	tPhaseCv;
+reg[4:0]	tPhaseCu;
+reg[4:0]	tPhaseCv;
 
 reg[15:0]	tModCu;
 reg[15:0]	tModCv;
@@ -54,13 +61,13 @@ reg[7:0]	tPixCv;
 assign pwmOut = tPwmOut;
 
 
-reg[11:0]	tPixCellX;		//base cell X
-reg[11:0]	tPixCellY;		//base cell Y
-reg[11:0]	tPixCellIx;		//base cell index
+reg[12:0]	tPixCellX;		//base cell X
+reg[12:0]	tPixCellY;		//base cell Y
+reg[12:0]	tPixCellIx;		//base cell index
 
 reg[3:0]	tPixCellFx;		//base cell index
 
-reg[31:0]	scrCell[4095:0];
+reg[31:0]	scrCell[8191:0];
 reg[31:0]	tCell;
 
 reg[7:0]	tCellCy;
@@ -100,11 +107,46 @@ reg[7:0]	tCellMCv;
 reg[7:0]	tCellNCv;
 
 reg			tCellBit;
+reg			tBusCSel;
+
+reg[15:0]	tCellBit16;
 
 // reg[7:0]	pStepTab[255:0];
 
+initial
+begin
+	cbPwmTab[ 0]=8'h00;		cbPwmTab[ 1]=8'h07;
+	cbPwmTab[ 2]=8'h0E;		cbPwmTab[ 3]=8'h14;
+	cbPwmTab[ 4]=8'h1A;		cbPwmTab[ 5]=8'h1E;
+	cbPwmTab[ 6]=8'h22;		cbPwmTab[ 7]=8'h24;
+	cbPwmTab[ 8]=8'h25;		cbPwmTab[ 9]=8'h24;
+	cbPwmTab[10]=8'h22;		cbPwmTab[11]=8'h1E;
+	cbPwmTab[12]=8'h1A;		cbPwmTab[13]=8'h14;
+	cbPwmTab[14]=8'h0E;		cbPwmTab[15]=8'h07;
+	cbPwmTab[16]=8'h00;		cbPwmTab[17]=8'hF9;
+	cbPwmTab[18]=8'hF2;		cbPwmTab[19]=8'hEC;
+	cbPwmTab[20]=8'hE6;		cbPwmTab[21]=8'hE2;
+	cbPwmTab[22]=8'hDE;		cbPwmTab[23]=8'hDC;
+	cbPwmTab[24]=8'hDB;		cbPwmTab[25]=8'hDC;
+	cbPwmTab[26]=8'hDE;		cbPwmTab[27]=8'hE2;
+	cbPwmTab[28]=8'hE6;		cbPwmTab[29]=8'hEC;
+	cbPwmTab[30]=8'hF2;		cbPwmTab[31]=8'hF9;
+end
+
 always @ (clock)
 begin
+	
+	tBusCSel = 0;
+
+//	if(busAddr[39:28]==12'hA0_A)
+	if(busAddr[39:16]==24'hA0_A000)
+		tBusCSel=1;
+
+	if(tBusCSel && busOE)
+	begin
+		busHold = 0;
+		busData = scrCell[busAddr[14:2]];
+	end
 	
 	tPixCellX=0;
 	tPixCellY=0;
@@ -114,7 +156,8 @@ begin
 	tPixCellFx[1:0] = tPixPosX[2:1];
 	tPixCellFx[3:2] = tPixPosY[1:0];
 
-	tPixCellIx=tPixCellY*80 + tPixCellX;
+	tPixCellIx = tPixCellY*80 + tPixCellX;
+//	tPixCellIx = tPixPosY[8:2]*80 + tPixPosX[9:3];
 	tCell = scrCell[tPixCellIx];
 	
 	case(tCell[31:30])
@@ -125,12 +168,18 @@ begin
 		tCellCBr[7:6]=tCell[21:20];
 		tCellCBg[7:6]=tCell[19:18];
 		tCellCBb[7:6]=tCell[17:16];
-		tCellCAr[5:4]=tCellCAr[7:6];	tCellCAr[3:2]=tCellCAr[7:6];
-		tCellCAg[5:4]=tCellCAg[7:6];	tCellCAg[3:2]=tCellCAg[7:6];
-		tCellCAb[5:4]=tCellCAb[7:6];	tCellCAb[3:2]=tCellCAb[7:6];
-		tCellCBr[5:4]=tCellCBr[7:6];	tCellCBr[3:2]=tCellCBr[7:6];
-		tCellCBg[5:4]=tCellCBg[7:6];	tCellCBg[3:2]=tCellCBg[7:6];
-		tCellCBb[5:4]=tCellCBb[7:6];	tCellCBb[3:2]=tCellCBb[7:6];
+		tCellCAr[5:4]=tCellCAr[7:6];
+		tCellCAr[3:2]=tCellCAr[7:6];
+		tCellCAg[5:4]=tCellCAg[7:6];
+		tCellCAg[3:2]=tCellCAg[7:6];
+		tCellCAb[5:4]=tCellCAb[7:6];
+		tCellCAb[3:2]=tCellCAb[7:6];
+		tCellCBr[5:4]=tCellCBr[7:6];
+		tCellCBr[3:2]=tCellCBr[7:6];
+		tCellCBg[5:4]=tCellCBg[7:6];
+		tCellCBg[3:2]=tCellCBg[7:6];
+		tCellCBb[5:4]=tCellCBb[7:6];
+		tCellCBb[3:2]=tCellCBb[7:6];
 
 		tCellMCy = tCellCAg;
 		tCellNCy = tCellCBg;
@@ -164,22 +213,34 @@ begin
 		tCellCu[7:5]=tCell[21:19];		tCellCv[7:5]=tCell[18:16];
 		tCellCu[4:2]=tCellCu[7:5];		tCellCv[4:2]=tCellCv[7:5];
 		tCellCu[1:0]=tCellCu[7:6];		tCellCv[1:0]=tCellCv[7:6];
-		tCellMCy=tCellCy-(tCellDy>>1);	tCellNCy=tCellMy+tCellDy;
+		tCellMCy=tCellCy-(tCellDy>>1);	tCellNCy=tCellMCy+tCellDy;
 		tCellMCu=tCellCu;				tCellNCu=tCellCu;
 		tCellMCv=tCellCv;				tCellNCv=tCellCv;
+		tCellBit16 = tCell[15:0];
 	end
-	default: begin end
+	default:
+	begin
+		tCellMCy=128;
+		tCellNCy=128;
+		tCellNCu=192;
+		tCellNCv=192;
+		tCellMCu=64;
+		tCellMCv=64;
+		tCellBit16 = tPixCellIx[0] ? 16'hFF00 : 16'h00FF;
+//		tCellBit16 = tPixPosX[3] ? 16'hFF00 : 16'h00FF;
+		
+	end
 	endcase
 	
 	case(tPixCellFx)
-		 0: tCellBit=tCell[ 3];		 1: tCellBit=tCell[ 2];
-		 2: tCellBit=tCell[ 1];		 3: tCellBit=tCell[ 0];
-		 4: tCellBit=tCell[ 7];		 5: tCellBit=tCell[ 6];
-		 6: tCellBit=tCell[ 5];		 7: tCellBit=tCell[ 4];
-		 8: tCellBit=tCell[11];		 9: tCellBit=tCell[10];
-		10: tCellBit=tCell[ 9];		11: tCellBit=tCell[ 8];
-		12: tCellBit=tCell[15];		13: tCellBit=tCell[14];
-		14: tCellBit=tCell[13];		15: tCellBit=tCell[12];
+		 0: tCellBit=tCellBit16[ 3];		 1: tCellBit=tCellBit16[ 2];
+		 2: tCellBit=tCellBit16[ 1];		 3: tCellBit=tCellBit16[ 0];
+		 4: tCellBit=tCellBit16[ 7];		 5: tCellBit=tCellBit16[ 6];
+		 6: tCellBit=tCellBit16[ 5];		 7: tCellBit=tCellBit16[ 4];
+		 8: tCellBit=tCellBit16[11];		 9: tCellBit=tCellBit16[10];
+		10: tCellBit=tCellBit16[ 9];		11: tCellBit=tCellBit16[ 8];
+		12: tCellBit=tCellBit16[15];		13: tCellBit=tCellBit16[14];
+		14: tCellBit=tCellBit16[13];		15: tCellBit=tCellBit16[12];
 	endcase
 	
 	if(tCellBit)
@@ -203,6 +264,7 @@ begin
 	tCbNextAcc = tCbAcc + 150137;
 	tScanNextPixClk = tScanPixClk + 1;
 	tScanNextRowClk = tScanRowClk;
+	tPwmOut = tPwmNextSt[8];
 
 	tPwmNextVal=0;
 	tVSyncNextClk = tVSyncClk;
@@ -296,7 +358,7 @@ begin
 			tScPwmCy = 153 * tBaseCy + 19456;
 			tScPwmCu = tModCu * tBaseCu;
 			tScPwmCv = tModCv * tBaseCv;
-			tPwmNextVal = tScPwmCy[16:8] + tScPwmCu[14:6] + tScPwmCv[14:6];
+			tPwmNextVal = tScPwmCy[15:8] + tScPwmCu[13:6] + tScPwmCv[13:6];
 		end
 	end
 end
@@ -317,10 +379,15 @@ begin
 	tPixPosX		<= tPixNextPosX;
 	tPixPosY		<= tPixNextPosY;
 	
-	tCellLastCy		<= tCellCy;
-	tCellLastDy		<= tCellDy;
-	tCellLastCu		<= tCellCu;
-	tCellLastCv		<= tCellCv;
+//	tCellLastCy		<= tCellCy;
+//	tCellLastDy		<= tCellDy;
+//	tCellLastCu		<= tCellCu;
+//	tCellLastCv		<= tCellCv;
+
+	if(tBusCSel && busWR)
+	begin
+		scrCell[busAddr[14:2]] <= busData;
+	end
 end
 
 

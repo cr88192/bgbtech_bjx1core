@@ -5,7 +5,7 @@ Console will be based on 32-bit cells, which may represent:
 * An 8x8 character cell or indexed tile.
 
 Cell Formats
-* 00pp-aaaa aabb-bbbb mmmm-ffff gggg-gggg
+* 00ss-aaaa aabb-bbbb mmmm-ffff gggg-gggg
 ** Color Pair, Selects Font+Glyph
 ** ss is color-space.
 ** aa is ColorA.
@@ -15,15 +15,17 @@ Cell Formats
 ** gg is glyph.
 * 01ss-aaaa aabb-bbbb pppp-pppp pppp-pppp
 ** Color Pair, 4x4x1 selects color A or B
-* 10yy-yydd dduu-uvvv yd00-ffff gggg-gggg
+* / 10yy-yydd dduu-uvvv yd00-ffff gggg-gggg
+** / YUVD centroid with font+glyph.
+* 10yy-yydd dduu-uvvv pppp-pppp pppp-pppp
+** YUVD centroid with delta-coded YUVD.
 * 11yy-yydd dduu-uvvv pppp-pppp pppp-pppp
 ** YUVD centroid, with 4x4x1 selecting low/high value.
 
 ss:
 * 00: RGB222 (rrggbb)
 ** r/g/b: 0=00, 01=85, 10=170, 11=255
-* 01: yuv733 (y*9+v*3+u)
-** u/v: 0=64, 1=128, 2=192
+* 01: yuv333 (3 bit Y, UV as an indexed vector)
 * 10: Custom 0
 * 11: Custom 1
 

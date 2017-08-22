@@ -25,3 +25,4 @@ randbits.txt
 *.jpg
 
 srvcore/obj_dir/*
+smalltst/compdec/obj_dir/*

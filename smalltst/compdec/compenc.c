@@ -179,6 +179,12 @@ int CEnc_EncImage(CEnc_Context *ctx, byte *ibuf)
 		cbcpwm2[i]=k+128;
 	}
 
+	for(i=0; i<32; i++)
+	{
+		printf("%02X ", (byte)(cbspwm2[i]-128));
+	}
+	printf("\n");
+
 	/* VSync Pulse */
 	for(i=0; i<5; i++)
 	{
