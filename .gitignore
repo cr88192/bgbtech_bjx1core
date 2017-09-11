@@ -23,6 +23,7 @@ randbits.txt
 *.tga
 *.png
 *.jpg
+*.wav
 
 srvcore/obj_dir/*
 smalltst/compdec/obj_dir/*

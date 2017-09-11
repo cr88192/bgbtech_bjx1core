@@ -899,8 +899,11 @@ Negate with carry value from Rm, storing result in Rn.
 
 All
 * 0009  NOP
+* 0i09  NOP #imm
 
 Does nothing.
+
+A 4 bit immediate may be supplied to a NOP (with a value between 1 and 14), but it will be ignored. This value is mostly intended for debugging purposes.
 
 
 === NOT ===
@@ -938,6 +941,8 @@ All, BJX1 (JQ=0)
 * CFii       OR.B #imm8, @(GBR, R0)
 
 Or immediate against a byte in memory.
+
+This instruction form is invalid in BJX1-64.
 
 
 === PREF ===
@@ -1315,10 +1320,12 @@ BJX1
 * 8Ejj-C8nj  TST #imm12, Rn
 
 
-=== TST ===
+=== TST.B ===
 
 All, BJX1 (JQ=0)
 * CCii  TST.B #imm8, @(GBR, R0)
+
+This instruction form is invalid in BJX1-64.
 
 
 === XOR ===
@@ -1346,6 +1353,8 @@ Subtract Imm or Rt from Rm or Rs, storing the result in Rn.
 
 All, BJX1 (JQ=0)
 * CEii  XOR.B #imm8, @(GBR, R0)
+
+This instruction form is invalid in BJX1-64.
 
 
 === XTRCT ===

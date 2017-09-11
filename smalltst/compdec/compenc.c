@@ -75,6 +75,13 @@ int storefile(char *name, byte *ibuf, int isz)
 	return(0);
 }
 
+int clamp255(int clr)
+{
+	if(clr<0)return(0);
+	if(clr>255)return(255);
+	return(clr);
+}
+
 int CEnc_WriteBits(u32 *bits, int pos, int val, int nb)
 {
 	u64 w;
@@ -100,6 +107,8 @@ int bpos;
 
 byte pwmst;
 byte fodd;
+byte bsmode;
+int frame;
 };
 
 int CEnc_WriteBitsCtx(CEnc_Context *ctx, int val, int nb)
@@ -111,19 +120,38 @@ int CEnc_WriteBitsCtx(CEnc_Context *ctx, int val, int nb)
 
 int CEnc_WriteBitPwm(CEnc_Context *ctx, int val)
 {
-	int i;
+	int i, j;
 	
 	if(val>>8)
 	{
 		if(val<0)val=0;
 		if(val>255)val=255;
 	}
-
-	i=ctx->pwmst;
-	i+=val;
-	ctx->pwmst=i;
 	
-	CEnc_WriteBitsCtx(ctx, i>>8, 1);
+	if(	(ctx->bsmode==0) ||
+		(ctx->bsmode==1))
+	{
+		i=ctx->pwmst;
+		i+=val;
+		ctx->pwmst=i;
+		
+		CEnc_WriteBitsCtx(ctx, i>>8, 1);
+		return(0);
+	}
+
+	if(ctx->bsmode==2)
+	{
+		i=ctx->pwmst;
+		i+=(val&15);
+		ctx->pwmst=i&15;
+		j=(val>>4)+(i>>4);
+		if(j>15)j=15;
+		
+		ctx->bits[ctx->bpos>>3]|=j<<((ctx->bpos&7)*4);
+		ctx->bpos++;
+		return(0);
+	}
+
 	return(0);
 }
 
@@ -148,7 +176,7 @@ int CEnc_EncImage(CEnc_Context *ctx, byte *ibuf)
 	int cr, cg, cb;
 	int cy, cu, cv;
 	int py, pu, pv;
-	int bp, bp1, odd;
+	int bp, bp1, bp2, odd;
 	int i, j, k, l;
 
 #if 0
@@ -179,11 +207,13 @@ int CEnc_EncImage(CEnc_Context *ctx, byte *ibuf)
 		cbcpwm2[i]=k+128;
 	}
 
+#if 0
 	for(i=0; i<32; i++)
 	{
 		printf("%02X ", (byte)(cbspwm2[i]-128));
 	}
 	printf("\n");
+#endif
 
 	/* VSync Pulse */
 	for(i=0; i<5; i++)
@@ -212,6 +242,13 @@ int CEnc_EncImage(CEnc_Context *ctx, byte *ibuf)
 //			CEnc_WriteBitPwm(ctx, 76+(cbspwm[k]-128));
 
 			bp=(ctx->bpos*150137)>>17;
+
+//			if((ctx->fodd^ctx->frame)&1)
+//				bp+=16;
+//			if(ctx->fodd&1)
+//				bp+=16;
+			bp+=(ctx->frame&7)*4;
+
 			l=76+(cbspwm2[bp&31]-128);
 			CEnc_WriteBitPwm(ctx, l);
 		}
@@ -230,6 +267,11 @@ int CEnc_EncImage(CEnc_Context *ctx, byte *ibuf)
 		for(j=0; j<248; j++)
 		{
 			bp=(ctx->bpos*150137)>>17;
+			bp+=(ctx->frame&7)*4;
+//			if((ctx->fodd^ctx->frame)&1)
+//			if(ctx->fodd&1)
+//				bp+=16;
+
 			l=76+(cbspwm2[bp&31]-128);
 			CEnc_WriteBitPwm(ctx, l);
 		}
@@ -243,9 +285,17 @@ int CEnc_EncImage(CEnc_Context *ctx, byte *ibuf)
 			cg=ibuf[(k*640+j)*4+1];
 			cb=ibuf[(k*640+j)*4+2];
 			
-			cy=(cr+2*cg+cb)/4;
-			cu=(cb-cg)/2+128;
-			cv=(cr-cg)/2+128;
+//			cy=(cr+2*cg+cb)/4;
+//			cu=(cb-cg)/2+128;
+//			cv=(cr-cg)/2+128;
+			
+			cy=0.299*cr+0.587*cg+0.114*cb;
+			cv=0.596*cr-0.274*cg-0.322*cb+128;
+			cu=0.211*cr-0.523*cg+0.312*cb+128;
+			
+			cy=clamp255(cy);
+			cu=clamp255(cu);
+			cv=clamp255(cv);
 			
 //			cu=128;
 //			cu=0;
@@ -255,9 +305,24 @@ int CEnc_EncImage(CEnc_Context *ctx, byte *ibuf)
 			for(k=0; k<8; k++)
 			{
 				bp=(ctx->bpos*150137)>>17;
-				bp1=(bp+3)&31;
-				pu=((cbcpwm2[bp1]-128)*(cu-128))>>6;
+
+//				if((ctx->fodd^ctx->frame)&1)
+//				if(ctx->fodd&1)
+//					bp+=16;
+				bp+=(ctx->frame&7)*4;
+
+//				bp1=(bp+3)&31;
+//				pu=((cbcpwm2[bp1]-128)*(cu-128))>>6;
+//				pv=((cbspwm2[bp1]-128)*(cv-128))>>6;
+
+//				bp1=(bp+0+3)&31;
+//				bp2=(bp+8+3)&31;
+				bp1=(bp+0)&31;
+				bp2=(bp+8)&31;
+//				bp2=(bp-8)&31;
 				pv=((cbspwm2[bp1]-128)*(cv-128))>>6;
+				pu=((cbspwm2[bp2]-128)*(cu-128))>>6;
+
 				l=py+pu+pv;
 				if(l<50)l=50;
 				CEnc_WriteBitPwm(ctx, l);
@@ -286,6 +351,9 @@ int CEnc_EncImage(CEnc_Context *ctx, byte *ibuf)
 //		ctx->pwmst=180;
 	}
 
+	ctx->fodd=!ctx->fodd;
+	ctx->frame++;
+
 	return(0);
 }
 
@@ -295,7 +363,7 @@ int main(int argc, char *argv[])
 	byte *ibuf, *dbuf;
 	byte *obuf;
 	char *ifn, *ofn;
-	int isz, xs, ys;
+	int isz, xs, ys, sz;
 	int i, j, k;
 	
 //	pwmtab_init();
@@ -335,8 +403,8 @@ int main(int argc, char *argv[])
 		return(0);
 	}
 
-	obuf=malloc(512*1024);
-	memset(obuf, 0, 512*1024);
+	obuf=malloc(10*8*512*1024);
+	memset(obuf, 0, 10*8*512*1024);
 
 	ctx=malloc(sizeof(CEnc_Context));
 	memset(ctx, 0, sizeof(CEnc_Context));
@@ -344,12 +412,27 @@ int main(int argc, char *argv[])
 	ctx->bits=(u32 *)obuf;
 //	ctx->bpsz=isz/4;
 
-	CEnc_EncImage(ctx, ibuf);
-	CEnc_EncImage(ctx, ibuf);
+	if(1)
+	{
+		ctx->bits[0]=0x55AA4100;
+		ctx->bpos=8;
+		ctx->bsmode=2;
+	}
+
+	for(i=0; i<10; i++)
+	{
+		CEnc_EncImage(ctx, ibuf);
+		CEnc_EncImage(ctx, ibuf);
+	}
 
 	if(ofn)
 	{
-		storefile(ofn, obuf, (ctx->bpos+7)/8);
+		sz=(ctx->bpos+7)/8;
+
+		if(ctx->bsmode==2)
+			sz=((ctx->bpos+7)/8)*4;
+
+		storefile(ofn, obuf, sz);
 	}
 	
 	return(0);

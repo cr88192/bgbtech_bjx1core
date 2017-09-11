@@ -82,10 +82,10 @@ byte *BTIC1H_Img_ReadTGA(FILE *fd, int *w, int *h)
 	fseek(fd, head.id_length, 1); /* skip comment */
 
 	pixlin=head.width*head.height;
-	obuf=btic1g_malloc(pixlin*4);
+	obuf=(byte *)btic1g_malloc(pixlin*4);
 	dest=obuf;
 
-	buf=btic1g_malloc(2*pixlin*(head.bpp>>3));
+	buf=(byte *)btic1g_malloc(2*pixlin*(head.bpp>>3));
 	fread(buf, 1, 2*pixlin*(head.bpp>>3), fd);
 	src=buf;
 
@@ -215,7 +215,7 @@ byte *BTIC1H_Img_ReadTGA(FILE *fd, int *w, int *h)
 //	if(!(head.attributes&32))
 	if(head.attributes&32)
 	{
-		dest=btic1g_malloc(pixlin*4);
+		dest=(byte *)btic1g_malloc(pixlin*4);
 		for(i=0; i<head.height; i++)
 			memcpy(&dest[i*head.width*4],
 				&obuf[(head.height-(i+1))*head.width*4], head.width*4);

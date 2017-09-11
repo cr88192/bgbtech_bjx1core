@@ -1,0 +1,12 @@
+# DESCRIPTION: Verilator output: Timestamp data for --skip-identical.  Delete at will.
+C "-Wall --cc MemAlu.v --exe sim_main0.cpp"
+S   4889056   929046  1500760815 "/home/bgb/verilator/verilator_bin"
+S      1368       68  1501116657 "MemAlu.v"
+T      5412       74  1501121722 "obj_dir/VMemAlu.cpp"
+T      2828       73  1501121722 "obj_dir/VMemAlu.h"
+T      1970       76  1501121722 "obj_dir/VMemAlu.mk"
+T       579       72  1501121722 "obj_dir/VMemAlu__Syms.cpp"
+T       963       71  1501121722 "obj_dir/VMemAlu__Syms.h"
+T       240       77  1501121722 "obj_dir/VMemAlu__ver.d"
+T         0        0  1501120998 "obj_dir/VMemAlu__verFiles.dat"
+T      1088       75  1501121722 "obj_dir/VMemAlu_classes.mk"

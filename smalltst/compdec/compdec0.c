@@ -1,6 +1,9 @@
 /*
 Decode Composite, 100MHz PWM bitstream
 
+Alternate: 100MHz PCM4
+	Signal stored as a series of 4-bit PCM samples, LSB first.
+
 60Hz, 262.5 lines per frame (interlace).
 Line Freq(1) = 15.750 kHz
 Line Freq(2) = 15.734 kHz
@@ -258,6 +261,8 @@ byte neqp;
 sbyte qaofs;	//QAM phase offset
 byte bestqi;	//best QAM intensity
 int frame;
+
+byte bsmode;	//bitstream mode
 };
 
 
@@ -274,17 +279,49 @@ int cdec_readbits(u32 *bits, int pos, int nb)
 	return(k);
 }
 
+int CDEC_PeekPwm8(cdec_imgbuf *ctx, int ofs)
+{
+	u32 p0;
+	int i, j;
+
+	if((ctx->bsmode==0) ||
+		(ctx->bsmode==1))
+	{
+		i=cdec_readbits(ctx->bits, ctx->bpos+ofs, 8);
+		j=pwmtab8[i];
+		return(j);
+	}
+	
+	if(ctx->bsmode==2)
+	{
+		p0=ctx->bits[(ctx->bpos+ofs)>>3];
+		i=	((p0    )&15)+((p0>> 4)&15)+
+			((p0>> 8)&15)+((p0>>12)&15)+
+			((p0>>16)&15)+((p0>>20)&15)+
+			((p0>>24)&15)+((p0>>28)&15);
+		i=i<<1;
+		return(i);
+	}
+	
+	return(0);
+}
+
 int cdec_decode0y(cdec_imgbuf *ctx)
 {
 	int p0, p1, p2, p3;
 	int p4, p5, p6, p7;
 	int py, pu, pv;
 	int cy, cu, cv;
+	int lcy, lcu, lcv;
 	int bp, bp1, bp2;
 	int i, j, k;
 
-	i=cdec_readbits(ctx->bits, ctx->bpos, 16);
-	py=pwmtab16[i];
+//	i=cdec_readbits(ctx->bits, ctx->bpos, 16);
+//	py=pwmtab16[i];
+
+//	i=cdec_readbits(ctx->bits, ctx->bpos, 8);
+//	py=pwmtab8[i];
+	py=CDEC_PeekPwm8(ctx, 0);
 
 //	pu=128;
 //	pv=128;
@@ -298,22 +335,24 @@ int cdec_decode0y(cdec_imgbuf *ctx)
 			(ctx->xpos>50) &&
 			(ctx->xpos<64))
 		{
+			if(ctx->ypos>200)
+				ctx->frame++;
+
 			ctx->ypos=0;
 			ctx->xpos=0;
-			ctx->bpos+=16;
+			ctx->bpos+=8;
 			ctx->neqp=0;
-			ctx->frame++;
 			return(0);
 		}
 
 		/* equalization pulse */
 		if(ctx->xpos &&
 			(ctx->xpos>300) &&
-			(ctx->xpos<400))
+			(ctx->xpos<420))
 		{
 			ctx->neqp++;
 			ctx->xpos=0;
-			ctx->bpos+=16;
+			ctx->bpos+=8;
 			return(0);
 		}
 		
@@ -322,6 +361,7 @@ int cdec_decode0y(cdec_imgbuf *ctx)
 			ctx->ypos+=2;
 			ctx->ypos&=~1;
 			ctx->ypos|=!(ctx->neqp&1);
+//			ctx->ypos|=!(ctx->frame&1);
 			
 //			ctx->qaofs=14;
 			ctx->qaofs=0;
@@ -337,51 +377,134 @@ int cdec_decode0y(cdec_imgbuf *ctx)
 		}
 
 		ctx->xpos=0;
-		ctx->bpos+=16;
+		ctx->bpos+=8;
 		return(0);
 	}
 
 #if 1
-	bp=(ctx->bpos*150137)>>17;
-	bp=bp+ctx->qaofs;
-	p0=cdec_readbits(ctx->bits, ctx->bpos+ 0, 16);
-	p1=cdec_readbits(ctx->bits, ctx->bpos+16, 16);
-//	pv=(qamstab16pa[bp&31][p0]+qamstab16pb[bp&31][p1])-128;
-//	pu=(qamctab16pa[bp&31][p0]+qamctab16pb[bp&31][p1])-128;
+	if((ctx->bsmode==0) ||
+		(ctx->bsmode==1))
+	{
+		bp=(ctx->bpos*150137)>>17;
+		bp=bp+ctx->qaofs;
+		p0=cdec_readbits(ctx->bits, ctx->bpos+ 0, 16);
+		p1=cdec_readbits(ctx->bits, ctx->bpos+16, 16);
+		p4=(p0  )&255;	p5=(p0>>8)&255;
+		p6=(p1  )&255;	p7=(p1>>8)&255;
 
-//	pv=(qamstab16pa[(bp+0)&31][p0]+qamstab16pb[(bp+0)&31][p1])-128;
-//	pu=(qamstab16pa[(bp+8)&31][p0]+qamstab16pb[(bp+8)&31][p1])-128;
-	
-	p4=(p0  )&255;	p5=(p0>>8)&255;
-	p6=(p1  )&255;	p7=(p1>>8)&255;
+		bp1=(bp+0+3)&31;
+	//	bp2=(bp+8+3)&31;
+	//	bp2=(bp-8+3)&31;
 
-	bp1=(bp+0+3)&31;	bp2=(bp+8+3)&31;
-	pv=(qamstab8pa[bp1][p4]+qamstab8pb[bp1][p5]+
-		qamstab8pc[bp1][p6]+qamstab8pd[bp1][p7])-384;
-	pu=(qamstab8pa[bp2][p4]+qamstab8pb[bp2][p5]+
-		qamstab8pc[bp2][p6]+qamstab8pd[bp2][p7])-384;
+		bp1=(bp+0+0)&31;
+		bp2=(bp+8+0)&31;
+
+		py=(pwmtab16[p0]+pwmtab16[p1])/2;
+	//	py=(pwmtab8[p4]+pwmtab8[p5]*3+pwmtab8[p6]*3+pwmtab8[p7])/8;
+
+		pv=(qamstab8pa[bp1][p4]+qamstab8pb[bp1][p5]+
+			qamstab8pc[bp1][p6]+qamstab8pd[bp1][p7])-384;
+		pu=(qamstab8pa[bp2][p4]+qamstab8pb[bp2][p5]+
+			qamstab8pc[bp2][p6]+qamstab8pd[bp2][p7])-384;
+	}
+
+	if(ctx->bsmode==2)
+	{
+//		bp=(ctx->bpos*150137)>>17;
+		bp=(ctx->bpos*150137)>>16;
+		bp=bp+ctx->qaofs;
+		
+		p0=CDEC_PeekPwm8(ctx,  0);
+		p1=CDEC_PeekPwm8(ctx,  8);
+		p2=CDEC_PeekPwm8(ctx, 16);
+		p3=CDEC_PeekPwm8(ctx, 24);
+
+//		py=(p0+p1+p2+p3)/4;
+		py=(p0+3*p1+3*p2+p3)/8;
+
+#if 1
+//		j=bp&31;
+		j=63-(bp&63);
+		i=j&15;
+		switch((j>>4)&3)
+		{
+		case 0:
+			p4=((p0*(15-i))+(p1*i))/16;
+			p5=((p1*(15-i))+(p2*i))/16;
+			p6=((p2*(15-i))+(p3*i))/16;
+			p7=((p3*(15-i))+(p0*i))/16;
+			break;
+		case 1:
+			p4=((p1*(15-i))+(p2*i))/16;
+			p5=((p2*(15-i))+(p3*i))/16;
+			p6=((p3*(15-i))+(p0*i))/16;
+			p7=((p0*(15-i))+(p1*i))/16;
+			break;
+		case 2:
+			p4=((p2*(15-i))+(p3*i))/16;
+			p5=((p3*(15-i))+(p0*i))/16;
+			p6=((p0*(15-i))+(p1*i))/16;
+			p7=((p1*(15-i))+(p2*i))/16;
+			break;
+		case 3:
+			p4=((p3*(15-i))+(p0*i))/16;
+			p5=((p0*(15-i))+(p1*i))/16;
+			p6=((p1*(15-i))+(p2*i))/16;
+			p7=((p2*(15-i))+(p3*i))/16;
+			break;
+		}
+#endif
+
+//		pv=((p4+p5)-(p6+p7))/2+128;
+//		pu=((p5+p6)-(p7+p0))/2+128;
+//		pu=((p7+p0)-(p5+p6))/2+128;
+
+		pv=((p4+p5)-(p6+p7))+128;
+		pu=((p7+p0)-(p5+p6))+128;
+//		pu=255-pu;
+		
+		pu=clamp255(pu);
+		pv=clamp255(pv);
+	}
 #endif
 
 	if((ctx->xpos>15) && (ctx->xpos<40))
 	{
 #if 1
-		j=bp+1; k=bp-1;
-//		p2=(qamstab16pa[j&31][p0]+qamstab16pb[j&31][p1])-128;
-//		p3=(qamstab16pa[k&31][p0]+qamstab16pb[k&31][p1])-128;
+		if((ctx->bsmode==0) ||
+			(ctx->bsmode==1))
+		{
+			j=bp+1; k=bp-1;
+	//		p2=(qamstab16pa[j&31][p0]+qamstab16pb[j&31][p1])-128;
+	//		p3=(qamstab16pa[k&31][p0]+qamstab16pb[k&31][p1])-128;
 
-		p2=(qamstab8pa[j&31][p4]+qamstab8pb[j&31][p5]+
-			qamstab8pc[j&31][p6]+qamstab8pd[j&31][p7])-384;
-		p3=(qamstab8pa[k&31][p4]+qamstab8pb[k&31][p5]+
-			qamstab8pc[k&31][p6]+qamstab8pd[k&31][p7])-384;
-		
-		if(p2>pv)
-			ctx->qaofs=(ctx->qaofs+1)&31;
-		if(p3>pv)
-			ctx->qaofs=(ctx->qaofs-1)&31;
-		
-		if((pv>136) && (pv>ctx->bestqi))
-			ctx->bestqi=pv;
+			p2=(qamstab8pa[j&31][p4]+qamstab8pb[j&31][p5]+
+				qamstab8pc[j&31][p6]+qamstab8pd[j&31][p7])-384;
+			p3=(qamstab8pa[k&31][p4]+qamstab8pb[k&31][p5]+
+				qamstab8pc[k&31][p6]+qamstab8pd[k&31][p7])-384;
+			
+			if(p2>pv)
+				ctx->qaofs=(ctx->qaofs+1)&31;
+			if(p3>pv)
+				ctx->qaofs=(ctx->qaofs-1)&31;
+			
+			if((pv>136) && (pv>ctx->bestqi))
+				ctx->bestqi=pv;
+		}
 #endif
+
+		if(ctx->bsmode==2)
+		{
+//			pv=((p4+p5)-(p6+p7))+128;
+//			pu=((p7+p0)-(p5+p6))+128;
+
+			cv=(p4-p6)+128;
+			cu=(p5-p7)+128;
+			if(cu>cv)
+				ctx->qaofs=(ctx->qaofs-1)&63;
+			if(cv>cu)
+				ctx->qaofs=(ctx->qaofs+1)&63;
+		}
 	}
 
 
@@ -390,11 +513,13 @@ int cdec_decode0y(cdec_imgbuf *ctx)
 
 //	cy=((py-76)*365)>>8;
 	cy=((py-76)*440)>>8;
-	if(cy<0)cy=0;
-	if(cy>255)cy=255;
+//	if(cy<0)cy=0;
+//	if(cy>255)cy=255;
+
+	cy=clamp255(cy);
 
 //	cy=(3*ctx->lcy+cy)/4;
-	cy=(ctx->lcy+cy)/2;
+//	cy=(ctx->lcy+cy)/2;
 
 	ctx->lcy=cy;
 	
@@ -420,8 +545,11 @@ int cdec_decode0y(cdec_imgbuf *ctx)
 		cv=128;
 	}
 
-	cu=(ctx->lcu+cu)/2;
-	cv=(ctx->lcv+cv)/2;
+//	cu=(ctx->lcu+cu)/2;
+//	cv=(ctx->lcv+cv)/2;
+
+	cu=(ctx->lcu+pu)/2;
+	cv=(ctx->lcv+pv)/2;
 
 //	cu=(3*ctx->lcu+pu)/4;
 //	cv=(3*ctx->lcv+pv)/4;
@@ -433,6 +561,28 @@ int cdec_decode0y(cdec_imgbuf *ctx)
 	ctx->lcv=cv;
 	
 	ctx->bpos+=8;
+
+	if(ctx->frame>1)
+//	if(0)
+//	if(1)
+	{
+		lcy=ctx->ybuf[ctx->ypos*CDEC_LINE_RAWXMAX+ctx->xpos];
+		lcu=ctx->ubuf[ctx->ypos*CDEC_LINE_RAWXMAX+ctx->xpos];
+		lcv=ctx->vbuf[ctx->ypos*CDEC_LINE_RAWXMAX+ctx->xpos];
+
+		cy=(lcy+cy)/2;
+		cu=(lcu+cu)/2;
+		cv=(lcv+cv)/2;
+		
+//		cy=(3*lcy+cy)/4;
+//		cu=(3*lcu+cu)/4;
+//		cv=(3*lcv+cv)/4;
+
+//		cy=(7*lcy+cy)/8;
+//		cu=(7*lcu+cu)/8;
+//		cv=(7*lcv+cv)/8;
+	}
+
 	ctx->ybuf[ctx->ypos*CDEC_LINE_RAWXMAX+ctx->xpos]=cy;
 	ctx->ubuf[ctx->ypos*CDEC_LINE_RAWXMAX+ctx->xpos]=cu;
 	ctx->vbuf[ctx->ypos*CDEC_LINE_RAWXMAX+ctx->xpos]=cv;
@@ -455,7 +605,7 @@ int cdec_decode0y(cdec_imgbuf *ctx)
 
 int cdec_getimage(cdec_imgbuf *ctx, byte *obuf)
 {
-	int cy, cu, cv;
+	int cy, cu, cv, cu1, cv1;
 	int cr, cg, cb;
 	int i, j, k;
 	
@@ -464,7 +614,8 @@ int cdec_getimage(cdec_imgbuf *ctx, byte *obuf)
 	{
 //		k=(i+2*CDEC_LINE_YOFS)*CDEC_LINE_RAWXMAX+(j+CDEC_LINE_XOFS);
 //		k=(479-(i&(~1)))+2*CDEC_LINE_YOFS;
-		k=(479-(i|1))+2*CDEC_LINE_YOFS;
+//		k=(479-(i|1))+2*CDEC_LINE_YOFS;
+		k=(479-i)+2*CDEC_LINE_YOFS;
 		k=(k*CDEC_LINE_RAWXMAX)+(j+CDEC_LINE_XOFS);
 		cy=ctx->ybuf[k];
 		cu=ctx->ubuf[k];
@@ -477,9 +628,15 @@ int cdec_getimage(cdec_imgbuf *ctx, byte *obuf)
 //		cg=cy;
 //		cb=cy;
 
-		cg=cy-(cu+cv-256)/2;
-		cr=cg+2*(cv-128);
-		cb=cg+2*(cu-128);
+//		cg=cy-(cu+cv-256)/2;
+//		cr=cg+2*(cv-128);
+//		cb=cg+2*(cu-128);
+
+		cu1=cu-128;
+		cv1=cv-128;
+		cr = cy + 0.9469 * cv1 + 0.6236 * cu1;
+		cg = cy - 0.2748 * cv1 - 0.6357 * cu1;
+		cb = cy - 1.1 * cv1 + 1.7 * cu1;
 		
 		cr=clamp255(cr);
 		cg=clamp255(cg);
@@ -573,15 +730,30 @@ int main(int argc, char *argv[])
 
 	ibuf=loadfile(ifn, &isz);
 	
+	if(!ibuf)
+	{
+		printf("Failed Load %s\n", ifn);
+		return(0);
+	}
+	
 	ctx=malloc(sizeof(cdec_imgbuf));
 	memset(ctx, 0, sizeof(cdec_imgbuf));
 	
 	ctx->bits=(u32 *)ibuf;
-	ctx->bpsz=isz/4;
+//	ctx->bpsz=isz/4;
+	ctx->bpsz=isz*32;
+	
+	if(ctx->bits[0]==0x55AA4100)
+	{
+		ctx->bits=((u32 *)ibuf)+1;
+		ctx->bpsz=((isz-4)/4)*8;
+		ctx->bsmode=2;
+	}
 
 	t0=clock();
 	
-	while((ctx->bpos>>5)<ctx->bpsz)
+//	while((ctx->bpos>>5)<ctx->bpsz)
+	while(ctx->bpos<ctx->bpsz)
 	{
 		cdec_decode0y(ctx);
 	}

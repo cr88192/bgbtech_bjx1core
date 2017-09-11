@@ -1,4 +1,6 @@
-Attempt at a more memory-dense ConGFX.
+Attempt at a more memory-dense ColorCell display.
+
+=== 4x4x1 in 32-bit Cells (Drop, Replaced) ===
 
 Console will be based on 32-bit cells, which may represent:
 * A 4x4 grid of pixels at 1bpp.
@@ -15,22 +17,168 @@ Cell Formats
 ** gg is glyph.
 * 01ss-aaaa aabb-bbbb pppp-pppp pppp-pppp
 ** Color Pair, 4x4x1 selects color A or B
-* / 10yy-yydd dduu-uvvv yd00-ffff gggg-gggg
-** / YUVD centroid with font+glyph.
-* 10yy-yydd dduu-uvvv pppp-pppp pppp-pppp
-** YUVD centroid with delta-coded YUVD.
+* 10yy-yydd dduu-uvvv ydmm-ffff gggg-gggg
+** YUVD Centroid, Selects Font+Glyph
 * 11yy-yydd dduu-uvvv pppp-pppp pppp-pppp
 ** YUVD centroid, with 4x4x1 selecting low/high value.
 
 ss:
 * 00: RGB222 (rrggbb)
 ** r/g/b: 0=00, 01=85, 10=170, 11=255
-* 01: yuv333 (3 bit Y, UV as an indexed vector)
+* 01: yuv733 (y*9+v*3+u)
+** u/v: 0=64, 1=128, 2=192
 * 10: Custom 0
 * 11: Custom 1
 
+mmmm (2-color Text):
+* 1&=Blink
+* 2&=Underline
+
+mm (YUVD):
+* 1&=Invert Min/Max
+
+Fonts:
+* 0=CP437 (8x8)
+* 1=Generic graphics set.
+**    00: Blank (All 0s)
+** 01-07: Horz Split (1-7 pixels, hard split)
+**    08: All 1s
+** 09-0F: Vert Split (1-7 pixels, hard split)
+**    10: 
+** 11-17: Horz Grad (1-7 pixels, dither)
+**    18: 
+** 19-1F: Vert Grad (1-7 pixels, dither)
+** 20-27: Down-Left Split
+** 28-2F: Up-Left Split
+** 30-37: Down-Left Grad
+** 38-3F: Up-Left Grad
+** 40-43: Hard Line (Horz, Vert, DL, UL; Hard 4px)
+** 44-47: Soft Line (Horz, Vert, DL, UL; Dither 4px)
+
+YUVD Centroid:
+* yyyy: Y center
+* dddd: Ymax-Ymin
+* uuu: U value
+* vvv: V value
+** 0=Special
+** 1=32
+** 2=84 / 74
+** 3=116 / 106
+** 4=128
+** 5=140 / 150
+** 6=172 / 182
+** 7=224
 
 Framebuffer:
 * 80x50 text (640x400);
 * 320x200 graphics.
 * Size=16kB.
+
+Possible:
+* 80x50 text (640x400);
+* 320x200 4bpp graphics.
+* 640x200 2bpp graphics.
+* 640x400 1bpp graphics.
+* Size=32kB.
+
+
+=== 4x4x1 and 4x4x2 in 32-bit Cells ===
+
+Typical Format
+* ttxx-xxxx xxxx-xxxx pppp-pppp pppp-pppp
+** tt is Tag
+** xxxx is color data.
+** pppp is poxel data.
+
+Tag:
+* 00
+** 4x4x2, Pixel 0 is ColorA
+** Whole block is pixel data.
+* 01
+** 4x4x2, Pixel 0 is ColorB
+** Whole block is pixel data.
+* 10
+** (29, 27): ColorA.Y
+** (26, 24): ColorB.Y
+** (23, 22): ColorA.U
+** (21, 20): ColorA.V
+** (19, 18): ColorB.U
+** (17, 16): ColorB.V
+* 11
+** (29:26): Color.Y
+** (25:22): Color.D
+** (21:19): Color.U
+** (18:16): Color.V
+
+
+In these blocks, the colors will be reused from the previous block.
+This blocks may use interpolated colors.
+
+
+=== 4x4x2 in 64-bit Cells ===
+
+64 bit cell:
+* (63:62), Tag
+* (61:47), ColorA
+* (46:32), ColorB
+* (61:0), Depends on Tag
+
+Tag:
+* 00: Reserved
+* 01: Reserved
+* 10: YUV Pair
+** (61:55), ColorA.Y
+** (54:48), ColorB.Y
+** (47:44), ColorA.U
+** (43:40), ColorA.V
+** (39:36), ColorB.U
+** (35:32), ColorB.V
+* 11: YUVD
+** (61:55), Color.U
+** (54:48), Color.V
+** (47:40), Color.Y
+** (39:32), Color.D
+** (31: 0), Pixel Bits
+
+Pixel Values:
+* 0=ColorA
+* 1=ColorB
+* 2=2/3A + 1/3B
+* 3=1/3A + 2/3B
+
+
+=== Delta Color Mode (Drop, Too Complicated) ===
+
+Encode color delta via ADPCM like scheme:
+* Range = 0..255
+* Use 3-bit deltas.
+* see
+** 7: e+2, +Lg3
+** 6: e+1, +Lg2
+** 5: e+0, +Lg
+** 4: e-1, +Sm
+** 3: e-1, -Sm
+** 2: e+0, -Lg
+** 1: e+1, -Lg2
+** 0: e+2, -Lg3
+
+E Tables (8..0)
+* 8: -255, -127, -63, -31, 31, 63, 127, 255
+* 7: -191,  -95, -47, -23, 23, 47,  95, 191
+* 6: -127,  -63, -31, -15, 15, 31,  63, 127
+* 5:  -95,  -47, -23, -11, 11, 23,  47,  95
+* 4:  -63,  -31, -15,  -7,  7, 15,  31,  63
+* 3:  -47,  -23, -11,  -5,  5, 11,  23,  47
+* 2:  -31,  -15,  -7,  -3,  3,  7,  15,  31
+* 1:  -23,  -11,  -5,  -2,  2,  5,  11,  23
+* 0:  -15,   -7,  -3,  -1,  1,  3,   7,  15
+
+
+Blk Color:
+* tt: Tag
+** 2: adaptive delta
+** 3: absolute (absolute values, e=7)
+* yyyy
+* dddd
+* uuu
+* vvv

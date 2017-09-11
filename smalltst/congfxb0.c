@@ -27,7 +27,7 @@ byte *loadfile(char *path, int *rsz)
 	fseek(fd, 0, 2);
 	sz=ftell(fd);
 	fseek(fd, 0, 0);
-	buf=malloc(sz);
+	buf=(byte *)malloc(sz);
 	i=fread(buf, 1, sz, fd);
 	fclose(fd);
 	
@@ -51,6 +51,17 @@ int storefile(char *name, byte *ibuf, int isz)
 	fwrite(ibuf, 1, isz, fd);
 	fclose(fd);
 	return(0);
+}
+
+int vqenc_rgb2p64(int cr, int cg, int cb, int ctsp);
+int vqenc_dyuvd(int cy, int dy, int cu, int cv, u64 *rst);
+int vqdec(byte *iblk, int ystr, u32 blk, u64 *rst);
+
+int clamp255(int clr)
+{
+	if(clr<0)return(0);
+	if(clr>255)return(255);
+	return(clr);
 }
 
 #if 0
@@ -383,7 +394,7 @@ int vqenc(byte *iblk, int ystr, u32 *oblk, u64 *rsta)
 	std=sta;
 	vqdec(pxb, 16, blkc, &std);
 
-#if 1
+#if 0
 	e0=vqberr(pxa, pxc);
 	e1=vqberr(pxb, pxc);
 	if(e1<e0)
@@ -401,8 +412,8 @@ int vqenc(byte *iblk, int ystr, u32 *oblk, u64 *rsta)
 	e1=vqberr(pxb, pxc);
 
 	blk=blka;
-	if(e1<e0)
-//	if(1)
+//	if(e1<e0)
+	if(1)
 	{
 		blk=blkb;
 		stb=stc;
@@ -451,13 +462,6 @@ int vqdec(byte *iblk, int ystr, u32 blk)
 
 
 #if 1
-int clamp255(int clr)
-{
-	if(clr<0)return(0);
-	if(clr>255)return(255);
-	return(clr);
-}
-
 u32 vqdec_fromyuv(int cy, int cu, int cv)
 {
 	int cr, cg, cb;
@@ -745,9 +749,9 @@ int vqenc_dyuvd(int cy, int dy, int cu, int cv, u64 *rst)
 	if(j<edcv) k++;
 	
 //	if(k>2)
-	if((k>1) || !sta)
+//	if((k>1) || !sta)
 //	if(0)
-//	if(1)
+	if(1)
 //	if(!sta)
 	{
 //		ixa=0xF000|(dcy2<<9)|(ddy2<<6)|(dcu2<<3)|(dcv2<<0);
@@ -991,6 +995,7 @@ char *emit_chesc(char *t, int v)
 	return(t);
 }
 
+#ifndef CONGFXB_NOMAIN
 int main(int argc, char *argv[])
 {
 	byte *ibuf, *dbuf;
@@ -1115,3 +1120,4 @@ int main(int argc, char *argv[])
 
 	BTIC1H_Img_SaveTGA("tga2asc0.tga", dbuf, xs, ys);
 }
+#endif

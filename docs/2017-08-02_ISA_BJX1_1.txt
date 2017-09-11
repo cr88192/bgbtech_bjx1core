@@ -93,6 +93,22 @@ Operating Mode:
 ** When an exception occurs, the mode is to be set according to these bits.
 
 
+=== Operating Modes ===
+
+
+BJX1-32:
+* Operation is mostly equivalent to SH.
+* Will support both 29 and 32-bit addressing.
+** By default, the initial addressing mode will be 29 bit.
+* Limited to the same register space as SH.
+* SR.JQ and DQ will be invalid on BJX1-32 cores.
+
+BJX1-64:
+* Will boot directly in 64-bit mode, and use a different memory map.
+* Uses a 48 bit address space with 40 bit external addresses.
+* Boot: JQ=1, DQ=0.
+
+
 === Addressing and MMU ===
 
 Address Space:
@@ -236,6 +252,29 @@ SHAR with variable shift
 * Negative values are undefined.
 
 
+=== Wide I-Form Ranges ===
+
+The 32-bit I-Forms will be organized into block-ranges.
+* 0xx0, MOVI20
+* 0xx1, MOVI20S
+* 3xx1, MOV I-Forms
+* 3xx9, Reserved/Unused
+* 82xx, XPFX1
+* 83xx, XPFX3
+* 86xx, XPFX4
+* 87xx, XPFX5
+* 8Axx, MOVI24
+* 8Cxx, XPFX2
+* 8Exx, XPFX0
+* CCxx, XPFY0 (BJX1-64 Only)
+* CDxx, XPFY1 (BJX1-64 Only)
+* CExx, XPFZ0 (BJX1-64 Only)
+* CFxx, XPFZ1 (BJX1-64 Only)
+* FxxF, XPFV0 (FPU/SIMD)
+
+XPFZ0/1 will be reserved for very-wide I-Forms.
+
+
 === Base 16-bit I-Forms ===
 
 Basic I-Forms (16-bit)
@@ -286,7 +325,7 @@ Basic I-Forms (16-bit)
 ****		0358 ISETMD.JQ		//Set SR.JQ and SR.DQ
 ***		0068 NOTT
 **	0--9
-***		0009 NOP				//NOP
+***		0i09 NOP				//NOP
 ***		0019 DIV0U				//Unsigned Divide
 ***		0n29 MOVT Rn			//Copy T bit to Rn
 ***		0n39 MOVRT Rn
@@ -318,7 +357,8 @@ Basic I-Forms (16-bit)
 **	0nmC MOV.B @(R0,Rm), Rn		//Load Byte From R0+Rm into Rn
 **	0nmD MOV.W/Q @(R0,Rm), Rn	//Load Word/Quad From R0+Rm into Rn
 **	0nmE MOV.L @(R0,Rm), Rn		//Load DWord From R0+Rm into Rn
-**	0nmF MAC.L @Rm, @Rn			//Load/Mul Rm and Rn and add to MACH/MACL
+**	0nmF MAC.L @Rm+, @Rn+		//Load/Mul Rm and Rn and add to MACH/MACL
+*** ( Deprecated for BJX1 )
 * 1nmd MOV.L Rm, @(Rn,disp)		//Store DWord Rm to Rn+4*Disp
 * 2---
 **	2nm0 MOV.B Rm, @Rn			//Store Byte Rm to @Rn
@@ -500,7 +540,8 @@ Basic I-Forms (16-bit)
 ***		4-6E -
 ***		4-7E -
 ***		4mNE LDC./Q Rm, Rm_B
-**	4nmF MAC.W/Q Rm, Rn
+**	4nmF MAC.W/Q @Rm+, @Rn+
+*** ( Deprecated for BJX1 )
 * 5nmd MOV.L @(Rm,disp), Rn
 * 6---
 **	6nm0 MOV.B @Rm, Rn		//Load Byte
@@ -548,22 +589,22 @@ Basic I-Forms (16-bit)
 * Addd BRA label
 * Bddd BSR label
 * C---
-**	C0dd MOV.B R0, @(GBR,disp)
-**	C1dd MOV.W/Q R0, @(GBR,disp)
-**	C2dd MOV.L R0, @(GBR,disp)
+**	C0dd MOV.B R0, @(GBR,disp)		//32-bit only, BJX1 deprecated
+**	C1dd MOV.W/Q R0, @(GBR,disp)	//32-bit only, BJX1 deprecated
+**	C2dd MOV.L R0, @(GBR,disp)		//32-bit only, BJX1 deprecated
 **	C3jj TRAPA #imm
-**	C4dd MOV.B @(GBR,disp), R0
-**	C5dd MOV.W/Q @(GBR,disp), R0
-**	C6dd MOV.L @(GBR,disp), R0
+**	C4dd MOV.B @(GBR,disp), R0		//32-bit only, BJX1 deprecated
+**	C5dd MOV.W/Q @(GBR,disp), R0	//32-bit only, BJX1 deprecated
+**	C6dd MOV.L @(GBR,disp), R0		//32-bit only, BJX1 deprecated
 **	C7dd MOVA @(PC,disp), R0		//Load Address into R0, DWORD aligned.
 **	C8jj TST./Q #imm, R0
 **	C9jj AND./Q #imm, R0
 **	CAjj XOR./Q #imm, R0
 **	CBjj OR./Q #imm, R0
-**	CCjj TST.B #imm, @(GBR,R0)
-**	CDjj AND.B #imm, @(GBR,R0)
-**	CEjj XOR.B #imm, @(GBR,R0)
-**	CFjj OR.B #imm, @(GBR,R0)
+**	CCjj TST.B #imm, @(GBR,R0)		//32-bit only, BJX1 deprecated
+**	CDjj AND.B #imm, @(GBR,R0)		//32-bit only, BJX1 deprecated
+**	CEjj XOR.B #imm, @(GBR,R0)		//32-bit only, BJX1 deprecated
+**	CFjj OR.B #imm, @(GBR,R0)		//32-bit only, BJX1 deprecated
 * Dndd MOV.L @(PC,disp), Rn			//Load DWord, DWord aligned.
 ** DQ=1: Result extended to QWord
 * Enii MOV./Q #imm, Rn				//Load immediate into register.
@@ -1019,3 +1060,12 @@ XPFX2 I-Forms
 ** 8C3e-Dnst FSUB FRs, FRt, FRn		// FRn=FRs-FRt
 ** 8C3e-Enst FMUL FRs, FRt, FRn		// FRn=FRs*FRt
 ** 8C3e-Fnst FDIV FRs, FRt, FRn		// FRn=FRs/FRt
+
+
+=== XPFZ0: Very Wide Block (Possible) ===
+
+*	CE7n-iiii-iiii-iiii ADD.Q #imm48, Rn	//Add 48-bit Quad Constant
+*	CEA0-dddd-dddd-dddd BRA #imm48, Rn		//Branch Disp48
+*	CEB0-dddd-dddd-dddd BSR #imm48, Rn		//Call Disp48
+*	CEEn-iiii-iiii-iiii MOV.Q #imm48, Rn	//Load 48-bit Quad Constant
+

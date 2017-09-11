@@ -1,0 +1,486 @@
+Thoughts:
+* Reduced language based on C and BGBScript2.
+* Will resemble a C-like subset of BS2.
+** Omits classes, methods, and dynamic types.
+** Will also omit support for large (128-bit numeric types).
+* Intended to serve a similar functional role to C.
+** Goal is to allow the compiler to be relatively fast and simple.
+** Will use a simple memory model (raw memory with a simple allocator).
+** A non-hosted implementation need not supply a memory allocator.
+
+
+=== Overview ===
+
+This language will assume a compiler processing multiple translation units in parallel, and with declarations being horizontally visible (via importing) rather than lexically visible (as they would be in C and C++). As such, there will be no direct analog of header files, lexical inclusion, or macro expansion.
+
+The traditional C style (of lexical inclusion and function prototypes) doesn't scale well and is basically unecessary.
+
+The compiler process will first compile the program to an bytecode IR, which will then be translated to native code during the "linking" step, which is to produce the final executable. This IR will similarly be used for statically linked libraries.
+
+Like C, the assumption is that the produced binary will be self contained with no dependency on an external VM or runtime. A goal is to also be able to support a bare-metal implementation.
+
+
+Declaration syntax will be relatively constrained and simplified compared with C. Pointer and array declarations will apply to the type rather than the declarator.
+
+Simple Function:
+ int func(int x, int y)
+ {
+ 	return(3*x+y);
+ }
+
+Function using array and pointer:
+ int func2(int x, int y)
+ {
+ 	int[16] arr;	//Array of 16 integers
+ 	int* parr;		//Pointer to array
+ 	parr=arr;		//Convert array to pointer
+ 	arr[1]=y;		//assign via index
+ 	*parr=x;		//asign via pointer
+ 	return(arr[0]+parr[1]);
+ }
+
+All declarations are, however, required to be visible within the scope they are used at the point of compilation (regardless of whether in the current translation unit or within an imported package).
+
+Initialized Array:
+ int[] arr=[1, 2, 3, 4, 5];
+ int[] arr={1, 2, 3, 4, 5};
+
+The new and delete operations will normally be syntax sugar over 'malloc' and 'free'.
+
+Objects and arrays declared via locals will have automatic storage duration, and their lifespan will end when their original scope terminates.
+
+Objects or arrays created by 'new' will be allocated on the heap, and are to be later freed using 'delete'. The functions 'std.mem.malloc' and 'std.mem.free' will be functionally equivalent, however (unlike new) they will not implicitly know the size of the created object.
+
+If another malloc and free are declared and visible within the current scope, and std.mem was not imported, new/delete will use these instead. Using these operators may fail on a non-hosted implementation unless replacements are provided.
+
+
+For example:
+ arr=new int[256];
+Will be functionally equivalent to:
+ arr=(int*)std.mem.malloc(256*sizeof(int));
+
+
+Possible Features:
+* Explicit Endianess
+* Bit-vector notation (Similar to Verilog).
+
+
+=== Standard Library ===
+
+Will be similar to the C standard library.
+* Much of this may be absent for a non-hosted implementation.
+* Parts of the API will be required, and are to be supplied by the compiler.
+
+Packages:
+* std.io, file and console IO.
+** FILE, fopen, fread, printf, ...
+* std.mem, memory functions, etc.
+** malloc, free, memcpy, ...
+* std.string, string functions.
+** strlen, strcmp, ...
+* std.math
+** math functions.
+
+
+Built-in functions:
+* std.mem.memcpy
+* std.mem.memset
+* std.string.strcpy
+* std.string.strcmp
+
+
+=== Scope ===
+
+Primarily will consist of several scope levels:
+* Global / Package
+** Variables and functions from imported packages are visible.
+** Other declarations are not.
+** Declarations and packages will be relative to an 'library' toplevel.
+** Declarations without an associated package will be regarded as global.
+*** There will be no 'true' global toplevel in this language.
+* Local
+** Variables declared within functions will normally be local.
+
+
+Each translation unit is limited to a single package.
+Any number of translation units may exist within a package.
+
+Packages will nominally be keyed to the source path, and may optionally define the file. The compiler is to be flexible on this matter.
+
+
+=== Types ===
+
+Integer types will be fixed size twos complement types.
+
+* SmallInt:
+** int, uint (32-bit)
+** short, ushort (16-bit)
+** byte, sbyte, ubyte (8-bit)
+** char, bchar, wchar, dchar (character)
+*** char will have an indeterminite size.
+*** bchar will be 8 bits (alias to ubyte).
+*** wchar will be 16 bits (alias to ushort).
+*** dchar will be 32 bits (alias to uint).
+* SmallLong:
+** long, ulong (64-bit)
+** nlong, unlong (32 or 64 bit)
+* FloatingPoint
+** float, 32-bit IEEE binary32
+** double, 64-bit IEEE binary64
+
+Floating point types are optional, and may be absent if the target lacks floating-point support.
+
+Non-pointer variables with a 'struct' will be referenced by-value.
+Passing and copying will similarly be by-value.
+
+Secondary Types:
+* string, character string.
+* bstring, byte character string.
+** Will be by default 8859-1.
+* wstring, word character string.
+** Will be by default UCS-2 or UTF16.
+* dstring, dword character string.
+** Will be by default UCS-4.
+* valist, vararg list
+** created from capturing an argument list.
+** Has a lifetime limited to the scope where it is created.
+
+
+The language will assume the use of a twos complement representation for signed integers.
+
+Types in the SmallInt class will promote to 'int' or 'uint' during arithmetic.
+* If the wider value is signed, the result will be signed.
+* If both values are the same size and both are narrower than int, the result will be signed.
+* If both values are unsigned, the result will be unsigned.
+* If the wider type is uint, the result will be unsigned.
+* Otherwise, the result will be signed.
+
+Promotion to SmallLong will follow a similar pattern, with promtion being triggered by the use of a SmallLong as an input to an arithmetic operator.
+
+
+Arithmetic Rules
+* Arithmetic within SmallInt or SmallLong is to produce a result with the given number of bits of precision (arithmetic is modular).
+* Left Shift will discard any bits which fall off the left side.
+* Right shift will be be a logical right shift for unsigned numbers.
+* Right shift will be be an arithmetic right shift for signed numbers.
+* For SmallInt shifts, the shift amount will be mod32.
+* For SmallLong shifts, the shift amount will be mod64.
+* Examples:
+** (5<<30)>>30 => 1
+** (5<<31)>>31 => -1
+** (0x12345678<<31) => 0
+** (0x12345678<<32) => 0x12345678
+
+
+Regarding structs, '.' and '->' will be in most cases treated as equivalent.
+
+Function pointers may exist, but function pointer types will require a typedef to create.
+
+Access to data via pointers will normally assume aligned access. The 'packed' modifier will allow specifying misaligned access.
+
+
+
+=== Tokens ===
+
+Identifier:
+* '_', '$'
+* 'A'..'Z', 'a'..'z'
+* '0'..'9'
+** However, an identifier may not begin with a digit.
+* An identifier may not exceed 252 characters.
+
+Integer:
+* Numbers will begin with a digit.
+* An '0x' prefix will denote a hexadecimal number.
+* An '0c' prefix will denote octal.
+** Use of the '0' prefix for octal is deprecated.
+* An '0b' prefix will denote binary.
+* An '0d' prefix will denote decimal.
+** Decimal will be the default number base.
+* Within numbers, '_' may be used as a digit separator.
+** It may appear between any digits within the body of the number.
+** It will have no effect on the value of the number.
+
+Real:
+* Will be a number which contains a decimal point.
+
+Strings:
+* Normal strings will be enclosed in quotes and use C-style '\' escapes.
+* String literals placed directly end-to-end will combine into a larger compound string literal.
+** The minimum maximum length for a string literal is 252 ASCII characters.
+** The minimum maximum length for a compound string is 4092 ASCII characters.
+** A compiler may reject code which exceeds these limits.
+* Single quoted literals will exist, but are not strings per-se.
+** They will represent one or more characters treated as a single value.
+** A single character will represent the codepoint of the character.
+** Multiple characters will be treated as an integer literal composed of these characters interpreted as bytes in little-endian order.
+* Triple-Quote strings may exist, which may be larger.
+
+Triple Quote Strings:
+* Optional.
+
+
+
+
+=== Syntactic Forms ===
+
+
+PackageStatement:
+* ( ''modifier'' * ) '''package''' ''packagename'' ';'
+* ( ''modifier'' * ) '''import''' ''packagename'' ';'
+* ( ''modifier'' * ) '''struct''' ''name'' '{' ''declaration''* '}'
+* ''declaration''
+
+Declaration:
+* ( ''modifier'' * ) ''typeexpression'' ''declname'' ( '=' ''expression'' ) ';'
+* ( ''modifier'' * ) ''typeexpression'' ''declname'' '''(''' ''argslist'' ''')''' ''block''
+
+Block:
+* ''BlockStatement''
+* '{' ''BlockStatement''* '}'
+
+
+BlockStatement:
+* ''declaration''
+* '''if''' '''(''' ''cond-expression'' ''')''' ''then-block'' ( '''else''' ''else-block'' )
+* '''for''' '''(''' ''init'' ';' ''cond'' ';' ''step'' ''')''' ''block''
+* '''while''' '''(''' ''cond'' ''')''' ''block''
+* '''do''' ''block'' '''while''' '''(''' ''cond'' ''')''' ';'
+* '''switch''' '''(''' ''indexexpr'' ''')''' ''block''
+* '''case''' ''expr'' ':'
+* '''default''' ':'
+* ''identifier'' ':'
+** Label
+* ''statement'' ';'
+
+Statement:
+* '''break'''
+** '''break''' ''level''
+* '''continue'''
+** '''continue''' ''level''
+* '''goto''' ''label''
+* '''return''' ''expression''
+* '''throw''' ''expression''
+* ''expression''
+
+ExpressionLiteral:
+
+* "chars"
+** String Literal
+** String literals placed end-to-end will be appended into a longer string.
+
+* 'char'
+** Character Literal
+** A char literal with multiple chars will be interpreted as a charcode.
+*** Result will be an int or long with the characters in little-endian order.
+
+* ''integer'' ( ''typesuffix'' )
+* ''real'' ( ''typesuffix'' )
+** Number Literal
+
+* ''name''
+** Identifier
+
+* """ ... """
+** Large String (Optional)
+
+* [ ''exprlist'' ] ( ''':''' ''type'' )
+* [ ''exprlist'' ] ( ''suffix'' )
+** Array
+
+* '''{''' ''exprlist'' '''}''' ( ''suffix'' )
+** Object or Array initializer.
+
+* '''(''' ''Expression'' ''')'''
+** Parenthesized Expression
+
+* '''new''' ''typeexpression'' ( '''(''' ''argslist'' ''')''' )
+** Create new object instance or array (Main Heap).
+
+* '''delete''' ''exprlist''
+* '''sizeof''' ''expression''
+
+OperatorPrecedence:
+* ''ExpressionLiteral''
+* postfix:
+** ''postfix'' '''++'''
+** ''postfix'' '''--'''
+** ''postfix'' '''[''' ''index'' ''']'''
+** ''postfix'' '''(''' ''exprlist'' ''')'''
+** ''postfix'' '''.''' ''ExpressionLiteral''
+** ''postfix'' '''->''' ''ExpressionLiteral''
+** ''ExpressionLiteral''
+* cast:
+** '''(''' ''TypeExpression'' ''')''' ''postfix''
+*** C style cast, will either succeed or fail at compile time.
+* unary:
+** '''++''' ''unary''
+** '''--''' ''unary''
+** '''+''' ''unary''
+** '''-''' ''unary''
+** '''~''' ''unary''
+** '''!''' ''unary''
+** '''*''' ''unary''
+** '''&''' ''unary''
+** ''cast''
+* muldiv: '''*''', '''/''', '''%'''
+** ''muldiv'' ''op'' ''unary''
+** ''unary''
+* addsub: '''+''', '''-'''
+** ''addsub'' ''op'' ''muldiv''
+** ''muldiv''
+* bitop: '''&''', '''|''', '''^'''
+** ''bitop'' ''op'' ''addsub''
+** ''addsub''
+* shlr: &lt;&lt;, &gt;&gt;
+** ''shlr'' ''op'' ''bitop''
+** ''bitop''
+* relcmp: &lt;, &gt;, &lt;=, &gt;=
+** ''relcmp'' ''op'' ''shlr''
+** ''shlr''
+* eqcmp: '''==''', '''!=''', '''===''', '''!=='''
+** ''eqcmp'' ''op'' ''relcmp''
+** ''relcmp''
+* logop: '''&&''', '''||'''
+** ''logop'' ''op'' ''eqcmp''
+** ''eqcmp''
+* tern: ?:
+** ''logop'' '''?''' ''tern'' ''':''' ''tern''
+** ''logop''
+* assignop: =, +=, -=, *=, /=, &lt;&lt;=, &gt;&gt;=, &=, |=, ^=
+** ''bitop'' ''op'' ''assignop''
+** ''bitop''
+* comma: ''','''
+** ''comma'' ''',''' ''assignop''
+** ''assignop''
+* Expression: ''comma''
+
+
+Literal Type Suffix:
+* SB, Signed Byte
+* B, Bool
+* SC, Char8
+* D, Double
+* F, Float
+* UB, Unsigned Byte
+* SI, Signed Int
+* UI, Unsigned Int
+* L, Long
+* UL, Unsigned Long
+* SS, Signed Short
+* US, Unsigned Short
+* W, Char
+
+
+Modifier:
+* '''abstract'''
+** Reserved
+
+* '''async'''
+** Reserved
+
+* '''const'''
+** Variable:
+*** Value types will be constant and immutable.
+*** Referenced value/data will be immutable (through this variable).
+**** However, the variable itself may still be modifiable.
+** Expression: Expression's value should be precomputed and immutable.
+*** Used with arrays/lists to indicate arrays with immutable contents.
+
+* '''extern'''
+** Import: Indicates modules that should be loaded.
+
+* '''final'''
+** Variable: is immutable.
+*** Final instance variables may be modified in constructors.
+
+* '''inline'''
+** Function: Compiler or VM should inline this function.
+
+* '''native'''
+** Package: Indicates contents are to be exported to native code (C ABI).
+** Import: Indicates external libraries to be imported.
+** Struct: Indicates struct may be shared with native code.
+** Function: Indicates a function to be imported/exported (C ABI).
+
+* '''packed'''
+** Struct: Members may be densely packed.
+** Pointer: May be used to access misaligned data.
+
+* '''private'''
+** Declaration may only be used within the current scope or package.
+
+* '''protected'''
+** Declaration may only be used within the current scope, or from derived scope.
+** This will include child packages.
+** This will be the default.
+
+* '''public'''
+** Declaration may be seen anywhere.
+** Package: Package and all of its contents will default to public.
+
+* '''static'''
+** Method: Is tied to the class, rather than an instance.
+** Class Variable: Holds value with the class, shared between instances.
+** Local Variable: Values remains between invocations.
+
+* '''synchronized'''
+** Block: Will be a critical section.
+
+* '''typedef'''
+** Variable: Declares an alias for a given type.
+** Method: Declares an type representing the method's signature.
+
+* '''volatile'''
+** Indicates that the variable may be modified asynchronously.
+** This causes changes to a variable to be immediately visible between threads.
+** Other variables may have their values cached temporarily.
+
+
+TypeName:
+* ''qname''
+** ''classname''
+** ''structname''
+
+* '''int''' (32-bit, signed)
+** '''uint''' (32-bit, unsigned)
+
+* '''long''' (64-bit, unsigned)
+** '''ulong''' (64-bit, unsigned)
+
+* '''nlong''' (32/64-bit)
+** '''unlong''' (32/64-bit, unsigned)
+** Size of nlong and unlong will depend on the native C 'long' type for the target.
+** This need not necessarily be the size of a pointer.
+
+* '''float''' (32-bit)
+* '''double''' (64-bit)
+* '''byte''' (8-bit)
+** '''sbyte''' (8-bit, signed)
+** '''ubyte''' (8-bit, unsigned)
+* '''short''' (16-bit, signed)
+** '''ushort''' (16-bit, unsigned)
+
+* '''char''' (indeterminate, unsigned)
+** '''bchar''' (8-bit, unsigned)
+** '''wchar''' (16-bit, unsigned)
+** '''dchar''' (32-bit, unsigned)
+
+* '''void'''
+
+
+TypeExpression:
+* ''typename''
+** QName identifying a class, struct, or typedef.
+
+* '''*''' ''typeexpression''
+** Pointer to a type.
+
+* '''&''' ''typeexpression''
+** Reference to a type.
+
+* ''typeexpression'' '[' ']'
+* ''typeexpression'' '[' ''size'' ']'
+
+* ''typeexpression'' '''*''' 
+** Pointer to a type.
