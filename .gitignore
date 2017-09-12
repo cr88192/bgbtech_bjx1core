@@ -26,4 +26,5 @@ randbits.txt
 *.wav
 
 srvcore/obj_dir/*
+bjx1core32/obj_dir/*
 smalltst/compdec/obj_dir/*
