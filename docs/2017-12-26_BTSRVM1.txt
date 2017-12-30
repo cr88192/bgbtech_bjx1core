@@ -1,0 +1,138 @@
+Registers:
+* 5-bit: R0..R31
+* 4-bit: R0-R7, R24..R31
+* e: nstq, nmii
+
+* 0xxx..Dxxx: 16-bit ops
+* Exxx..Fxxx: 32-bit ops
+
+* 00nm  ADD Rm, Rn  //Rn=Rn+Rm
+* 01nm  SUB Rm, Rn  //Rn=Rn-Rm
+* 02nm  MUL Rm, Rn  //Rn=Rn*Rm
+* 03nm  AND Rm, Rn
+* 04nm  OR Rm, Rn
+* 05nm  XOR Rm, Rn
+* 06nm  SHAD Rm, Rn
+* 07nm  SHLD Rm, Rn
+* 08nm  MOV Rm, Rn
+* 09nm  CMP/EQ Rm, Rn
+* 0Anm  CMP/GT Rm, Rn
+* 0Bnm  CMP/HI Rm, Rn
+* 0Cnm  TSTQ Rm, Rn
+* 0Dnm  CMPQ/EQ Rm, Rn
+* 0Enm  CMPQ/GT Rm, Rn
+* 0Fnm  CMPQ/HI Rm, Rn
+* 10nm  MOV.B Rm, @Rn
+* 11nm  MOV.W Rm, @Rn
+* 12nm  MOV.L Rm, @Rn
+* 13nm  MOV.Q Rm, @Rn
+* 14nm  MOV.B @Rm, Rn
+* 15nm  MOV.W @Rm, Rn
+* 16nm  MOV.L @Rm, Rn
+* 17nm  MOV.Q @Rm, Rn
+* 18nm  MOV.F FRm, @Rn
+* 19nm  MOV.D FRm, @Rn
+* 1Anm  MOV.F @Rm, FRn
+* 1Bnm  MOV.D @Rm, FRn
+* 1Cnm  MOVU.B @Rm, Rn
+* 1Dnm  MOVU.W @Rm, Rn
+* 1Enm  MOVU.L @Rm, Rn
+* 1Fnm  ?
+* ..
+
+* 6nmd  MOV.L Rm, @(Rn, disp)
+* 7nmd  MOV.L @(Rm, disp), Rn
+* 8nii  MOV #imm8, Rn  //Rn=imm
+* 9nii  ADD #imm8, Rn  //Rn=Rn+imm
+* Anii  LDSH8 #imm8, Rn  //Rn=(Rn<<8)|imm8
+* B0nj  SHLLQ ix, Rn  //Rn=Rn<<ix, logical shift left
+* B1nj  SHLRQ ix, Rn  //Rn=Rn>>ix, logical shift right
+* B2nj  SHARQ ix, Rn  //Rn=Rn>>ix, arithmetic shift right
+* B3nj  SHARL ix, Rn  //Rn=Rn>>ix, arithmetic shift right
+* B4nj  SHLL2Q ix, Rn  //Rn=Rn<<(16+2*ix, 4*ix), logical shift left
+* B5nj  SHLR2Q ix, Rn  //Rn=Rn>>(16+2*ix, 4*ix), logical shift right
+* B6nj  SHAR2Q ix, Rn  //Rn=Rn>>(16+2*ix, 4*ix), arithmetic shift right
+* B7nj  SHAR2L ix, Rn  //Rn=Rn>>(16+ix), arithmetic shift right
+
+* B8md  MOV.F FRm, @(SP, disp4)
+* B9md  MOV.D FRm, @(SP, disp4)
+* BAmd  MOV.L Rm, @(SP, disp4)
+* BBmd  MOV.Q Rm, @(SP, disp4)
+* BCnd  MOV.F @(SP, disp4), FRn
+* BDnd  MOV.D @(SP, disp4), FRn
+* BEnd  MOV.L @(SP, disp4), Rn
+* BFnd  MOV.Q @(SP, disp4), Rn
+
+* C0dd  BRA #disp8
+* C1dd  BSR #disp8
+* C2dd  BT #disp8
+* C3dd  BF #disp8
+* Dxxx  //similar to Cxxx
+
+* E0e0-xxxx  ... 
+** //equivalent to 16-bit op range
+** //support all 32 registers.
+* E6e0-nmii  ADD Rm, imm8, Rn  //Rn=Rn+Rm
+* E6e1-nmii  SUB Rm, imm8, Rn  //Rn=Rn-Rm
+* E6e2-nmii  MUL Rm, imm8, Rn  //Rn=Rn*Rm
+* E6e3-nmii  AND Rm, imm8, Rn
+* E6e4-nmii  OR Rm, imm8, Rn
+* E6e5-nmii  XOR Rm, imm8, Rn
+* E6e6-nmii  SHAD Rm, imm8, Rn
+* E6e7-nmii  SHLD Rm, imm8, Rn
+* E6e8-0nst  ADD Rs, Rt, Rn
+* E6e8-1nst  SUB Rs, Rt, Rn
+* ...
+* E6e9-0nmo  MOV.B Rm, @(Rn, Ro)
+* E6e9-1nmo  MOV.W Rm, @(Rn, Ro)
+* E6e9-2nmo  MOV.L Rm, @(Rn, Ro)
+* E6e9-3nmo  MOV.Q Rm, @(Rn, Ro)
+* E6e9-4nmo  MOV.B @(Rm, Ro), Rn
+* E6e9-5nmo  MOV.W @(Rm, Ro), Rn
+* E6e9-6nmo  MOV.L @(Rm, Ro), Rn
+* E6e9-7nmo  MOV.Q @(Rm, Ro), Rn
+* E6e9-8nmo  LEA.B @(Rm, Ro), Rn
+* E6e9-9nmo  LEA.W @(Rm, Ro), Rn
+* E6e9-Anmo  LEA.L @(Rm, Ro), Rn
+* E6e9-Bnmo  LEA.Q @(Rm, Ro), Rn
+* E6e9-Cnmo  MOV.F FRm, @(Rn, Ro)
+* E6e9-Dnmo  MOV.D FRm, @(Rn, Ro)
+* E6e9-Enmo  MOV.F @(Rm, Ro), FRn
+* E6e9-Fnmo  MOV.D @(Rm, Ro), FRn
+* ...
+* E7e0-nmdd  MOV.B Rm, @(Rn, disp10)
+* E7e1-nmdd  MOV.W Rm, @(Rn, disp10)
+* E7e2-nmdd  MOV.L Rm, @(Rn, disp10)
+* E7e3-nmdd  MOV.Q Rm, @(Rn, disp10)
+* E7e4-nmdd  MOV.B @(Rm, disp10), Rn
+* E7e5-nmdd  MOV.W @(Rm, disp10), Rn
+* E7e6-nmdd  MOV.L @(Rm, disp10), Rn
+* E7e7-nmdd  MOV.Q @(Rm, disp10), Rn
+* ...
+* E6ni-iiii  ADD20 #imm20, Rn
+** E7ni-iiii  ADD20 #imm20, Rn
+* E8ni-iiii  MOV20 #imm20, Rn
+** E9ni-iiii  MOV20 #imm20, Rn
+* EAni-iiii  LDSH20 #imm20, Rn
+** EBni-iiii  LDSH20 #imm20, Rn
+* EC0d-dddd  BRA #disp20
+* EC1d-dddd  BSR #disp20
+* EC2d-dddd  BT #disp20
+* EC3d-dddd  BF #disp20
+
+constant loading would work a bit different than SH though:
+* MOV 0x12, R12
+** =>  8C12
+* MOV 0x1234, R12
+** =>  E8C0-1234
+* MOV 0x123456, R12
+** =>  E8C0-1234 AC56
+* MOV 0x12345678, R12
+** =>  E8C0-0123 EAC4-5678
+* MOV 0x123456789ABC, R12
+** =>  E8C0-0012 EAC3-4567 EAC8-9ABC
+* MOV 0x123456789ABCDEF, R12
+** =>  E8C1-2345 EAC6-789A EACB-CDEF
+* MOV 0x123456789ABCDEF0, R12
+** =>  E8C0-1234 EAC5-6789 EACA-BCDE ACF0
+

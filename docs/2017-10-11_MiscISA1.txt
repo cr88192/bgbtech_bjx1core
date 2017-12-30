@@ -1,0 +1,81 @@
+but, more idle musing (say, if I just try to freehand something "plausible"):
+  00nm  MOV   Rm, Rn
+  01nm  ADD   Rm, Rn
+  02nm  SUB   Rm, Rn
+  03nm  AND   Rm, Rn
+  04nm  OR    Rm, Rn
+  05nm  XOR   Rm, Rn
+  06nm  SHLD  Rm, Rn  //logical shift (barrel)
+  07nm  SHAD  Rm, Rn  //arithmetic shift (barrel)
+  08nm  CMPGT Rm, Rn
+  09nm  CMPGE Rm, Rn
+  0Anm  CMPEQ Rm, Rn
+  0Bnm  TEST  Rm, Rn  //(Rm&Rn)!=0
+  0Cnm  CMPAB Rm, Rn  //compare above
+  0Dnm  CMPAE Rm, Rn  //compare above/equal
+  0Enm  MUL   Rm, Rn
+  0F0n  NEG   Rn
+  0F1n  NOT   Rn
+  0F2n  JMP   Rn
+  0F3n  JSR   Rn
+  0F4n  BRAF  Rn
+  0F5m  BSRF  Rn
+  0F6n  MOV.Q @(PC,R0), Rn
+  0F7m  MOV.Q Rm, @(PC,R0)
+  0F8n  EXTS.B Rn
+  0F9n  EXTU.B Rn
+  0FAn  EXTS.W Rn
+  0FBn  EXTU.W Rn
+  0FCn  EXTS.L Rn
+  0FDn  EXTU.L Rn
+  0FE0  NOP
+  0FE1  RTS
+  ..
+  10xx  -
+  11dd  BRA    disp8s	//unconditional branch
+  12dd  BT     disp8s	//branch if true
+  13dd  BF     disp8s	//branch if false
+  14nd  MOV.L  @(SP, disp4), Rn
+  15md  MOV.L  Rm, @(SP, disp4)
+  16nd  MOV.Q  @(SP, disp4), Rn
+  17md  MOV.Q  Rm, @(SP, disp4)
+  18nm  MOV.B  @Rm, Rn
+  19nm  MOV.W  @Rm, Rn
+  1Anm  MOV.L  @Rm, Rn
+  1Bnm  MOV.Q  @Rm, Rn
+  1Cnm  MOV.B  Rm, @Rn
+  1Dnm  MOV.W  Rm, @Rn
+  1Enm  MOV.L  Rm, @Rn
+  1Fnm  MOV.Q  Rm, @Rn
+  20nm  MOV.B  @(Rm,R0), Rn
+  21nm  MOV.W  @(Rm,R0), Rn
+  22nm  MOV.L  @(Rm,R0), Rn
+  23nm  MOV.Q  @(Rm,R0), Rn
+  24nm  MOV.B  Rm, @(Rn,R0)
+  25nm  MOV.W  Rm, @(Rn,R0)
+  26nm  MOV.L  Rm, @(Rn,R0)
+  27nm  MOV.Q  Rm, @(Rn,R0)
+  28nm  MOV.B  @Rm+, Rn
+  29nm  MOV.W  @Rm+, Rn
+  2Anm  MOV.L  @Rm+, Rn
+  2Bnm  MOV.Q  @Rm+, Rn
+  2Cnm  MOV.B  Rm, @-Rn
+  2Dnm  MOV.W  Rm, @-Rn
+  2Enm  MOV.L  Rm, @-Rn
+  2Fnm  MOV.Q  Rm, @-Rn
+  30ni  SHL    #imm, Rn  //shift left imm bits
+  31ni  SHLD4  #imm, Rn  //logical shift left or right imm*4 bits
+  32ni  SHR    #imm, Rn  //logical shift right 0..15 bits
+  33ni  SAR    #imm, Rn  //arithmetic shift right 0..15 bits
+  34nm  LDC    Rm, Rn	 //load control register
+  35nm  STC    Rm, Rn    //store control register
+  ..
+  4ndd  MOV.LQ @(SP, disp7), Rn  //Load from stack (L/Q via LSB)
+  5ndd  MOV.LQ Rm, @(SP, disp7)  //Store to stack
+  6nii  MOV    #imm8, Rn
+  7nii  ADD    #imm8, Rn
+  8ndd  MOV.L  @(PC, disp8), Rn	//load DWORD
+  9ndd  MOV.Q  @(PC, disp8), Rn	//load QWORD
+  Anmd  MOV.LQ @(Rm, disp3), Rn  //
+  Bnmd  MOV.LQ Rm, @(Rn, disp3)  //
+  ...

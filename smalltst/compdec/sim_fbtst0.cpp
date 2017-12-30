@@ -24,8 +24,8 @@ int main(int argc, char **argv, char **env)
 	uint32_t *obuf;
 	uint32_t *imgbuf;
 	int bpos, bplim;
-	int imgba;
-	int xs, ys, cxs, cys, ystr;
+	int imgba, imgba0, irq, irqtck, irqsblk;
+	int xs, ys, cxs, cys, ystr, cblks;
 	int y, x;
 	int cy, dy, cu, cv;
 	int pcy, pdy, pcu, pcv;
@@ -61,15 +61,23 @@ int main(int argc, char **argv, char **env)
 
 	ibuf=BTIC1H_Img_LoadTGA(ifn, &xs, &ys);
 
+	if(!ibuf)
+	{
+		printf("Failed Load %s\n", ifn);
+	}
+
 	dbuf=(byte *)malloc(xs*ys*4);
 
 	dste=0;
 
 	if(xs==320)
 	{
+		printf("Is 320\n");
+
 		cxs=xs/4;
 		cys=ys/4;
 		ystr=xs*4;
+		cblks=cxs*cys;
 
 		for(y=0; y<60; y++)
 	//		for(x=0; x<80; x++)
@@ -98,9 +106,12 @@ int main(int argc, char **argv, char **env)
 
 	if(xs==640)
 	{
+		printf("Is 640\n");
+
 		cxs=xs/4;
 		cys=ys/8;
 		ystr=xs*8;
+		cblks=cxs*cys;
 
 		for(y=0; y<60; y++)
 	//		for(x=0; x<80; x++)
@@ -118,6 +129,15 @@ int main(int argc, char **argv, char **env)
 		imgbuf[0x9F00/4]=0;
 	}
 
+	imgba=0;
+	irq=1;
+	imgba0=imgba;
+	irqtck=100000*16;
+//	irqsblk=1024;
+	irqsblk=768;
+//	irqtck=0;
+	top->busOE=0;
+
 	while (!Verilated::gotFinish())
 	{
 		top->clock = (main_time>>3)&1;
@@ -127,15 +147,51 @@ int main(int argc, char **argv, char **env)
 //		top->idxAddr=0x100;
 //		top->idxDisp=3;
 
-//		if(imgba<(8192+2048))
-		if(imgba<(4096+1024))
+		irqtck--;
+		if(irqtck<=0)
+//		if(0)
 		{
-			top->busAddr=0x00A0A0000000LL+(imgba*4);
-			top->busData=imgbuf[imgba];
-			top->busWR=1;
+			irq=1;
+			irqtck=100000*16;
+//			irqsblk=1020;
+			irqsblk=288;
+//			irqsblk=320;
+//			irqsblk=360;
+			irqsblk=420;
+//			irqsblk=480;
+
+			if(imgba0)
+//			if(0)
+			{
+				imgba=imgba0;
+				printf("IRQ BA=%d\n", imgba0);
+			}
+		}
+
+		if(irq)
+		{
+			blk=imgbuf[imgba&16383];
+			if(blk)
+			{
+//				printf("Blk %08X\n", blk);
+				top->busAddr=0x0000ACA00000LL+((imgba*4)&4095);
+				top->busData=blk;
+				top->busWR=1;
+				top->busOE=0;
+			}else
+			{
+				top->busWR=0;
+				top->busOE=0;
+			}
 		}else
 		{
+#if 1
+			top->busAddr=0x0000ACA1FF20LL;
 			top->busWR=0;
+			top->busOE=1;
+			if(!top->busHold && top->clock)
+				imgba0=top->busData;
+#endif
 		}
 
 		top->eval();
@@ -152,12 +208,26 @@ int main(int argc, char **argv, char **env)
 
 			bpos++;
 			
-//			imgba=(imgba+1)&8191;
-//			if(imgba<(8192+2048))
-			if(imgba<(4096+1024))
-				imgba=(imgba+1)&16383;
-//			if(imgba>=(8192+2048))
-//				imgba=0;
+			if(irq)
+//			if(1)
+			{
+//				imgba=(imgba+1)&8191;
+//				if(imgba<(8192+2048))
+
+//				if(imgba<(4096+1024))
+//					imgba=(imgba+1)&16383;
+//				if(imgba>=(8192+2048))
+//					imgba=0;
+			
+#if 1
+				imgba=(imgba+1);
+				if(imgba>=cblks)
+					imgba-=cblks;
+				irqsblk--;
+				if(irqsblk<=0)
+					irq=0;
+#endif
+			}
 		}
 		
 		if(bpos>=bplim)

@@ -725,6 +725,7 @@ int main(int argc, char *argv[])
 //	if(!ifn || !ofn)
 	if(!ifn)
 	{
+		printf("No Input File %s\n", ifn);
 		return(-1);
 	}
 

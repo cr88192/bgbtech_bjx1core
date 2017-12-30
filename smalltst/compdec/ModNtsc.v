@@ -28,6 +28,8 @@ reg[3:0]	tPwmNextSt;			//Next PWM State
 reg[7:0]	tPwmVal;			//PWM Value
 reg[7:0]	tPwmNextVal;		//Next PWM Value
 reg			tPwmCarry;
+reg[7:0]	tPwmSt8;			//PWM State (8 bit)
+reg[7:0]	tPwmNextSt8;		//Next PWM State (8 bit)
 
 reg[21:0]	tCbAcc;				//Colorburst Accumulator
 reg[21:0]	tCbNextAcc;			//Next Colorburst Accumulator
@@ -107,25 +109,37 @@ end
 reg[3:0]	tPwmOutA;
 reg[3:0]	tPwmOutB;
 reg			tPwmOutCarry;
+reg			pwmIs4bit;
 
 always @ (clock)
 begin
-//	tPwmNextSt = tPwmSt + tPwmVal;
-//	tPwmNextSt = tPwmSt + ((tPwmVal<<4)&255);
-	{tPwmCarry, tPwmNextSt} = {1'b0, tPwmSt} + {1'b0, tPwmVal[3:0]};
+	pwmIs4bit = 0;
+
+	if(pwmIs4bit)
+	begin
+//		tPwmNextSt = tPwmSt + tPwmVal;
+//		tPwmNextSt = tPwmSt + ((tPwmVal<<4)&255);
+		{tPwmCarry, tPwmNextSt} = {1'b0, tPwmSt} + {1'b0, tPwmVal[3:0]};
+
+//		tPwmOut = tPwmNextSt[8];
+//		tPwmOut = tPwmNextSt[8] ? (tPwmVal[7:4]+1) : tPwmVal[7:4];
+
+		tPwmOutA = tPwmVal[7:4];
+		{tPwmOutCarry, tPwmOutB} = {1'b0, tPwmOutA} + 1;
+		tPwmOut = (tPwmCarry && !tPwmOutCarry) ?
+			tPwmOutB : tPwmOutA;
+
+//		tPwmOut = (tPwmNextSt[4] && (tPwmVal[7:4]!=15)) ?
+//			(tPwmVal[7:4]+1) : tPwmVal[7:4];
+	end
+	else
+	begin
+		{tPwmCarry, tPwmNextSt8} = {1'b0, tPwmSt8} + {1'b0, tPwmVal[7:0]};
+//		tPwmOut[3:0] = 4{tPwmCarry};
+		tPwmOut[3:0] = tPwmCarry ? 4'b1111 : 4'b0000;
+	end
 
 	tCbNextAcc = tCbAcc + 150137;
-//	tPwmOut = tPwmNextSt[8];
-//	tPwmOut = tPwmNextSt[8] ? (tPwmVal[7:4]+1) : tPwmVal[7:4];
-
-	tPwmOutA = tPwmVal[7:4];
-	{tPwmOutCarry, tPwmOutB} = {1'b0, tPwmOutA} + 1;
-	tPwmOut = (tPwmCarry && !tPwmOutCarry) ?
-		tPwmOutB : tPwmOutA;
-
-//	tPwmOut = (tPwmNextSt[4] && (tPwmVal[7:4]!=15)) ?
-//		(tPwmVal[7:4]+1) : tPwmVal[7:4];
-
 
 	tScanNextPixClk = tScanPixClk + 1;
 	tScanNextRowClk = tScanRowClk;
@@ -141,6 +155,8 @@ begin
 	tModNextCv=0;
 	tBaseNextCu=0;
 	tBaseNextCv=0;
+
+	tBaseNextCy = 0;
 
 	tPwmNextVal = 76;
 
@@ -231,6 +247,7 @@ always @ (posedge clock)
 begin
 
 	tPwmSt			<= tPwmNextSt;
+	tPwmSt8			<= tPwmNextSt8;
 
 	tPwmVal			<= tPwmNextVal;
 	tCbAcc			<= tCbNextAcc;

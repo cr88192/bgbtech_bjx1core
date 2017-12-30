@@ -9,9 +9,17 @@ typedef unsigned short u16;
 typedef signed short s16;
 typedef unsigned int u32;
 typedef signed int s32;
+
+#ifdef __x86_64__
+typedef unsigned long u64;
+typedef signed long s64;
+#else
 typedef unsigned long long u64;
 typedef signed long long s64;
+#endif
 
+
+#define BGBMID_FILE		FILE
 
 #define bgbmid_fopen	fopen
 #define bgbmid_fclose	fclose
@@ -33,4 +41,49 @@ void *bgbmid_malloc(int sz)
 void bgbmid_free(void *ptr)
 {
 	free(ptr);
+}
+
+
+int FRGL_TimeMS()
+{
+#ifdef _WIN32
+	static unsigned int init;
+	unsigned int t;
+
+	t=timeGetTime();
+	if(!init)init=t;
+
+	return((unsigned int)(t-init));
+#else
+
+#ifdef __EMSCRIPTEN__
+	struct timeval	tp;
+	static int      secbase; 
+
+	gettimeofday(&tp, NULL);  
+	if(!secbase)secbase=tp.tv_sec;
+	return(((tp.tv_sec-secbase)*1000)+tp.tv_usec/1000);
+#endif
+
+#ifndef linux
+	static int init;
+	int t;
+
+	t=clock();
+	t*=CLOCKS_PER_SEC/1000.0;
+//	t=FRGL_TimeMS();
+
+	if(!init)init=t;
+
+	return((unsigned int)(t-init));
+#endif
+#ifdef linux
+	struct timeval	tp;
+	static int      secbase; 
+
+	gettimeofday(&tp, NULL);  
+	if(!secbase)secbase=tp.tv_sec;
+	return(((tp.tv_sec-secbase)*1000)+tp.tv_usec/1000);
+#endif
+#endif
 }

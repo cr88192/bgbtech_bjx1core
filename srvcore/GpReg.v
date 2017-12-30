@@ -281,11 +281,15 @@ always @ (posedge clk) begin
 		begin
 			if(isQwD==1'b1)
 			begin
+				$display("R[%X]Q=%X", tIdRegDLo, dataD);
+			
 				regs_lo[tIdRegDLo] <= dataD[31:0];
 				regs_hi[tIdRegDLo] <= dataD[63:32];
 			end
 			else
 			begin
+				$display("R[%X]D=%X", tIdRegDLo, dataD);
+
 				if(idRegD[6])
 					regs_hi[tIdRegDLo] <= dataD[31:0];
 				else
@@ -294,6 +298,8 @@ always @ (posedge clk) begin
 		end
 		else
 		begin
+			$display("CSR[%X]=%X", tIdRegDLo, dataD);
+
 			if(idRegD[6])
 			begin
 				creg_lo[tIdRegDLo[3:0]] <= dataD[31:0];

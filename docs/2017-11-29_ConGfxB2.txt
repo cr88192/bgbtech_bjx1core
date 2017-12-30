@@ -1,0 +1,54 @@
+8x8 Color Cell blocks in 256 bits (4 bpp).
+* 128 bits: 8x8x2bpp (Y)
+* 32 bits: 4x4x2bpp (U)
+* 32 bits: 4x4x2bpp (V)
+* 64 bits: Header
+
+Block (YUV420, Tag=1):
+* Tag:BYTE
+* Resv:BYTE
+* McY:BYTE
+* NcY:BYTE
+* McU:BYTE
+* NcU:BYTE
+* McV:BYTE
+* NcV:BYTE
+* PixU:DWORD
+* PixV:DWORD
+* PixY:DWORD[4]
+* Block has YUV interpolated separately.
+
+Block (8x8x3, Tag=2):
+* Tag:BYTE
+* Resv:BYTE
+* McY:BYTE
+* NcY:BYTE
+* McU:BYTE
+* NcU:BYTE
+* McV:BYTE
+* NcV:BYTE
+* PixY:DWORD[6]
+* Block has a single axis interpolating all 3 components.
+
+VRAM: 8kB buffer, holding two rows of blocks.
+* ISR: 1.8kHz
+** ISR fills alternating block rows.
+* Alternates between even and odd frames.
+** One frame gives even scanlines and the other odd scanlines.
+** Repeating the same blocks will give 240 line output.
+
+
+
+SVC1
+* 0rrrrrgg-gggbbbbb 0rrrrrgg-gggbbbbb 0ppppppp-pppppppp
+** 4x4x1 bpp
+* 0rrrrrgg-gggbbbbb 0rrrrrgg-gggbbbbb 1ppppppp-pppppppp pppppppp-pppppppp
+** 4x4x2 bpp
+* 10000000-00000000
+** End Of Image
+* 100000nn-nnnnnnn0
+** Skip
+* 100010nn-nnnnnnn0 0rrrrrgg-gggbbbbb
+** Run of flat color.
+* 1rrrrrgg-gggbbbb1
+** Flat Color Block

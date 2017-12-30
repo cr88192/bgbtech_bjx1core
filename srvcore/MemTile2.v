@@ -12,7 +12,7 @@ Address Bits
 
 module MemTile2(
 	/* verilator lint_off UNUSED */
-	clk,
+	clock,
 	reset,
 
 	opRd,
@@ -34,7 +34,7 @@ module MemTile2(
 	extNotReady
 	);
 
-input clk;			//clock
+input clock;		//clock
 input reset;		//reset
 
 /* Normal Memory */
@@ -128,7 +128,48 @@ assign extHold = reqLdTile || ldTileAct || ldTileDlyAct || resetAct;
 assign rdValue = tDrdValue;
 assign irdValue = tIrdValue;
 
+reg[ 3:0] ldTileWIdx;
+reg[ 3:0] ldTileNextWIdx;
+reg[47:0] ldTileExtAddr;	//external memory address
+
+reg[10:0] ldTileIdx;
+
+reg ldTileAct;
+reg ldTileNextAct;
+
+reg ldTileStAct;
+reg ldTileNextStAct;
+
+reg ldTileDlyAct;
+reg ldTileNextDlyAct;
+
+reg ldTileLastAct;
+reg ldTileNextLastAct;
+
+reg ldTileDn;
+reg ldTileNextDn;
+
+reg ldTileExtOE;
+reg ldTileNextExtOE;
+
+reg ldTileExtWR;
+reg ldTileNextExtWR;
+
+assign extOE   = ldTileExtOE;
+assign extWR   = ldTileExtWR;
+assign extAddr = ldTileExtAddr;
+
+reg dTileOpWrOK;
+reg resetAct;
+reg resetNextAct;
+reg[ 6:0] resetCurTile;
+reg[ 6:0] resetNextTile;
+reg[15:0] resetTOK;
+
+
+
 always @ (opRd or opWr or iopRd)
+// always @ (clock)
 begin
 	dTileMiss  = 0;
 	iTileMiss  = 0;
@@ -210,10 +251,6 @@ begin
 		end
 		
 	end
-// end
-
-// always @ (iopRd)
-// begin
 	
 	if(iopRd)
 	begin
@@ -251,42 +288,19 @@ begin
 			reqLdITile             = 1;
 			reqLdSTile             = 0;
 		end
+		else
+		begin
+			irdtTBlock[31: 0] = iTile[iTileIdx  ];
+			irdtTBlock[63:32] = iTile[iTileIdx+1];
+			irdtTBlock[95:64] = iTile[iTileIdx+2];
+			irdtValue         = irdtTBlock>>irdtShl;
+			tIrdValue[63:0]   = irdtValue[63:0];
+
+			$display("iTileRd A=%X Ix=%X,Sh=%X Val=%X", imemAddr,
+				iTileIdx, irdtShl, tIrdValue);
+		end
 	end
-end
 
-reg[ 3:0] ldTileWIdx;
-reg[ 3:0] ldTileNextWIdx;
-reg[47:0] ldTileExtAddr;	//external memory address
-
-reg[10:0] ldTileIdx;
-
-reg ldTileAct;
-reg ldTileNextAct;
-
-reg ldTileStAct;
-reg ldTileNextStAct;
-
-reg ldTileDlyAct;
-reg ldTileNextDlyAct;
-
-reg ldTileLastAct;
-reg ldTileNextLastAct;
-
-reg ldTileDn;
-reg ldTileNextDn;
-
-reg ldTileExtOE;
-reg ldTileNextExtOE;
-
-reg ldTileExtWR;
-reg ldTileNextExtWR;
-
-assign extOE   = ldTileExtOE;
-assign extWR   = ldTileExtWR;
-assign extAddr = ldTileExtAddr;
-
-always @ (reqLdTile or ldTileAct or reqStTile)
-begin
 	ldTileNextDlyAct = ldTileAct;
 	ldTileNextLastAct = ldTileDlyAct;
 
@@ -393,17 +407,12 @@ begin
 			end
 		end
 	end
-end
 
-reg dTileOpWrOK;
-reg resetAct;
-reg resetNextAct;
-reg[ 6:0] resetCurTile;
-reg[ 6:0] resetNextTile;
-reg[15:0] resetTOK;
+// end
 
-always @ (clk)
-begin
+// always @ (clk)
+// begin
+
 	if(resetAct)
 	begin
 		resetNextTile = resetCurTile+1;
@@ -416,93 +425,12 @@ begin
 		resetNextAct=1;
 		resetNextTile=0;
 	end
-end
 
-always @ (posedge clk)
-begin
-	resetAct <= resetNextAct;
-	resetCurTile <= resetNextTile;
+// end
 
-	if(resetAct)
-	begin
-		iTileBase[resetCurTile] <= 32'hFFFF_FFFF;
-		dTileBase[resetCurTile] <= 32'hFFFF_FFFF;
-		resetTOK <= 16'h1234;
-	end
-	else
-	begin
-		ldTileWIdx    <= ldTileNextWIdx;
-		ldTileAct     <= ldTileNextAct;
-		ldTileStAct   <= ldTileNextStAct;
-		ldTileDlyAct  <= ldTileNextDlyAct;
-		ldTileDn      <= ldTileNextDn;
-		ldTileExtOE   <= ldTileNextExtOE;
-		ldTileExtWR   <= ldTileNextExtWR;
+// always @ (opRd)
+// begin
 
-		reqSyncTile    <= reqNextSyncTile;
-		reqSyncTileIdx <= reqNextSyncTileIdx;
-
-		ldTileLastAct <= ldTileNextLastAct;
-
-		if(dTileOpWrOK && (!ldTileAct || ldTileDn))
-//		if(dTileOpWrOK && !ldTileAct)
-//		if(dTileOpWrOK)
-		begin
-			$display("Posedge Write CA=%03X CB=%04X BH=%08X BL=%08X",
-				dTileIdx, dTileIdx*4,
-				rdtTBlock2[63:32], rdtTBlock2[31: 0]);
-			dTile[dTileIdx  ] <= rdtTBlock2[31: 0];
-			dTile[dTileIdx+1] <= rdtTBlock2[63:32];
-			dTile[dTileIdx+2] <= rdtTBlock2[95:64];
-//			dTileBaseHi[dTileIdx[10:4]][10] <= 1;
-			dTileBaseDty[dTileIdx[10:4]] <= 1;
-			dTileBaseDty[dTileLimIdx[10:4]] <= 1;
-			
-		end
-
-/*
-//		if(dTileOpWrOK && !ldTileAct)
-		if(dTileOpWrOK && (!ldTileAct || ldTileDn))
-		begin
-//			dTileBaseHi[dTileIdx[10:4]][10] <= 1;
-//			dTileBaseHi[dTileLimIdx[10:4]][10] <= 1;
-			dTileBaseDty[dTileIdx[10:4]] <= 1;
-			dTileBaseDty[dTileLimIdx[10:4]] <= 1;
-		end
-*/
-
-//		if(ldTileAct)
-//		if(ldTileNextAct)
-		if(ldTileAct && !ldTileDn && !ldTileStAct)
-		begin
-			if(reqLdITile)
-				iTile[ldTileIdx] <= extData;
-			else
-				dTile[ldTileIdx] <= extData;
-		end
-
-		if(ldTileDn)
-		begin
-//			ldTileDn  <= 0;
-//			ldTileAct <= 0;
-			
-			if(reqLdITile)
-			begin
-				iTileBase[reqLdTileIdx[6:0]] <= reqLdTileBaseLo;
-				iTileBaseHi[reqLdTileIdx[6:0]][9:0] <= reqLdTileBaseHi[9:0];
-			end
-			else
-			begin
-				dTileBase[reqLdTileIdx[6:0]] <= reqLdTileBaseLo;
-				dTileBaseHi[reqLdTileIdx[6:0]][9:0] <= reqLdTileBaseHi[9:0];
-				dTileBaseDty[reqLdTileIdx[6:0]] <= 0;
-			end
-		end
-	end
-end
-
-always @ (opRd)
-begin
 	if(opRd)
 	begin
 //		rdtValue=tile[tileIdx]>>rdtShl;
@@ -566,92 +494,10 @@ begin
 // */
 
 	end
-end
 
-always @ (opWr)
-begin
 	dTileOpWrOK = 0;
-
-//	if(opWr)
 	if(opWr && !reqLdTile && !ldTileAct)
 	begin
-//		dTileBaseHi[dTileIdx[11:4]][10] = 1;
-//		dTileBaseHi[dTileLimIdx[11:4]][10] = 1;
-
-/*
-		case(opMode)
-			MD_BYTE:
-				case(memAddr[1:0])
-				0:	dTile[dTileIdx  ][ 7: 0] = wrValue[7:0];
-				1:	dTile[dTileIdx  ][15: 8] = wrValue[7:0];
-				2:	dTile[dTileIdx  ][23:16] = wrValue[7:0];
-				3:	dTile[dTileIdx  ][31:24] = wrValue[7:0];
-				endcase
-
-			MD_WORD:
-				case(memAddr[1:0])
-				0:	dTile[dTileIdx  ][15: 0] = wrValue[15:0];
-				1:	dTile[dTileIdx  ][23: 8] = wrValue[15:0];
-				2:	dTile[dTileIdx  ][31:16] = wrValue[15:0];
-				3: begin
-					dTile[dTileIdx  ][31:24] = wrValue[ 7:0];
-					dTile[dTileIdx+1][ 7: 0] = wrValue[15:8];
-				end
-				endcase
-
-			MD_DWORD:
-				case(memAddr[1:0])
-				0:	dTile[dTileIdx  ][31: 0] = wrValue[31:0];
-				1: begin
-					dTile[dTileIdx  ][31: 8] = wrValue[23: 0];
-					dTile[dTileIdx+1][ 7: 0] = wrValue[31:24];
-				end
-				2: begin
-					dTile[dTileIdx  ][31:16] = wrValue[15: 0];
-					dTile[dTileIdx+1][15: 0] = wrValue[31:16];
-				end
-				3: begin
-					dTile[dTileIdx  ][31:24] = wrValue[ 7:0];
-					dTile[dTileIdx+1][23: 0] = wrValue[31:8];
-				end
-				endcase
-
-			MD_QWORD:
-				case(memAddr[1:0])
-				0:
-				begin
-					dTile[dTileIdx  ][31: 0] = wrValue[31: 0];
-					dTile[dTileIdx+1][31: 0] = wrValue[63:32];
-				end
-				1: begin
-					dTile[dTileIdx  ][31: 8] = wrValue[23: 0];
-					dTile[dTileIdx+1][ 7: 0] = wrValue[31:24];
-					dTile[dTileIdx+1][31: 8] = wrValue[55:32];
-					dTile[dTileIdx+2][ 7: 0] = wrValue[63:56];
-				end
-				2: begin
-					dTile[dTileIdx  ][31:16] = wrValue[15: 0];
-					dTile[dTileIdx+1][15: 0] = wrValue[31:16];
-					dTile[dTileIdx+1][31:16] = wrValue[47:32];
-					dTile[dTileIdx+2][15: 0] = wrValue[63:48];
-				end
-				3: begin
-					dTile[dTileIdx  ][31:24] = wrValue[ 7: 0];
-					dTile[dTileIdx+1][23: 0] = wrValue[31: 8];
-					dTile[dTileIdx+1][31:24] = wrValue[39:32];
-					dTile[dTileIdx+2][23: 0] = wrValue[63:40];
-				end
-				endcase
-
-			default:
-			begin
-//				rdtValue2 = 64'h0000_0000_0000_0000 ;
-//				rdtMask2  = 64'h0000_0000_0000_0000 ;
-			end
-		endcase
-*/
-
-// /*
 		rdtTBlock2 = rdtTBlock;
 		case(opMode)
 			MD_BYTE:
@@ -689,80 +535,85 @@ begin
 			default:	begin			end
 		endcase
 
-//		if(!reqLdTile && !ldTileAct)
-			dTileOpWrOK = 1;
-// */
-
-/*
-		case(opMode)
-			MD_BYTE:
-			begin
-				rdtValue2[ 7: 0] = wrValue[7:0];
-				rdtValue2[63: 8] = 56'h0000_0000_0000_00 ;
-				rdtValue2[95:64] = 0;
-				rdtMask2 = 96'h0000_0000_0000_00FF ;
-			end
-
-			MD_WORD:
-			begin
-				rdtValue2[15: 0] = wrValue[15:0];
-				rdtValue2[63:16] = 48'h0000_0000_0000 ;
-				rdtValue2[95:64] = 0;
-				rdtMask2 = 96'h0000_0000_0000_FFFF ;
-			end
-
-			MD_DWORD:
-			begin
-				rdtValue2[31: 0] = wrValue[31:0];
-				rdtValue2[63:32] = 32'h0000_0000 ;
-				rdtValue2[95:64] = 0;
-				rdtMask2 = 96'h0000_0000_FFFF_FFFF ;
-			end
-
-			MD_QWORD:
-			begin
-				rdtValue2[63: 0] = wrValue[63:0];
-				rdtValue2[95:64] = 0;
-				rdtMask2 = 96'h0000_0000_FFFF_FFFF_FFFF_FFFF ;
-			end
-
-			default:
-			begin
-				rdtValue2 = 96'h0000_0000_0000_0000 ;
-				rdtMask2  = 96'h0000_0000_0000_0000 ;
-			end
-		endcase
-
-		rdtValue = rdtValue2<<rdtShl;
-		rdtMask  = rdtMask2<<rdtShl;
-
-//		if(!reqLdTile && !ldTileAct)
-//		begin
-//			$display("Comb Write\n");
-//			rdtTBlock[31: 0]=dTile[dTileIdx  ];
-//			rdtTBlock[63:32]=dTile[dTileIdx+1];
-//			rdtTBlock[95:64]=dTile[dTileIdx+2];
-			rdtTBlock2=(rdtTBlock&(~rdtMask))|rdtValue;
-//			dTile[dTileIdx  ]=rdtTBlock[31: 0];
-//			dTile[dTileIdx+1]=rdtTBlock[63:32];
-			dTileOpWrOK = 1;
-//		end
-*/
-
+		dTileOpWrOK = 1;
 	end
 end
 
-
-always @ (iopRd)
+always @ (posedge clock)
 begin
-	if(iopRd)
+	resetAct <= resetNextAct;
+	resetCurTile <= resetNextTile;
+
+	if(resetAct)
 	begin
-		irdtTBlock[31: 0] = iTile[iTileIdx  ];
-		irdtTBlock[63:32] = iTile[iTileIdx+1];
-		irdtTBlock[95:64] = iTile[iTileIdx+2];
-		irdtValue         = irdtTBlock>>irdtShl;
-		tIrdValue[63:0]   = irdtValue[63:0];
-//		tIrdValue = 0;
+		iTileBase[resetCurTile] <= 32'hFFFF_FFFF;
+		dTileBase[resetCurTile] <= 32'hFFFF_FFFF;
+		resetTOK <= 16'h1234;
+	end
+	else
+	begin
+		ldTileWIdx    <= ldTileNextWIdx;
+		ldTileAct     <= ldTileNextAct;
+		ldTileStAct   <= ldTileNextStAct;
+		ldTileDlyAct  <= ldTileNextDlyAct;
+		ldTileDn      <= ldTileNextDn;
+		ldTileExtOE   <= ldTileNextExtOE;
+		ldTileExtWR   <= ldTileNextExtWR;
+
+		reqSyncTile    <= reqNextSyncTile;
+		reqSyncTileIdx <= reqNextSyncTileIdx;
+
+		ldTileLastAct <= ldTileNextLastAct;
+
+		if(dTileOpWrOK && (!ldTileAct || ldTileDn))
+		begin
+			$display("Posedge Write CA=%03X CB=%04X BH=%08X BL=%08X",
+				dTileIdx, dTileIdx*4,
+				rdtTBlock2[63:32], rdtTBlock2[31: 0]);
+			dTile[dTileIdx  ] <= rdtTBlock2[31: 0];
+			dTile[dTileIdx+1] <= rdtTBlock2[63:32];
+			dTile[dTileIdx+2] <= rdtTBlock2[95:64];
+//			dTileBaseHi[dTileIdx[10:4]][10] <= 1;
+			dTileBaseDty[dTileIdx[10:4]] <= 1;
+			dTileBaseDty[dTileLimIdx[10:4]] <= 1;
+			
+		end
+
+/*
+//		if(dTileOpWrOK && !ldTileAct)
+		if(dTileOpWrOK && (!ldTileAct || ldTileDn))
+		begin
+//			dTileBaseHi[dTileIdx[10:4]][10] <= 1;
+//			dTileBaseHi[dTileLimIdx[10:4]][10] <= 1;
+			dTileBaseDty[dTileIdx[10:4]] <= 1;
+			dTileBaseDty[dTileLimIdx[10:4]] <= 1;
+		end
+*/
+
+//		if(ldTileAct)
+//		if(ldTileNextAct)
+		if(ldTileAct && !ldTileDn && !ldTileStAct)
+		begin
+			if(reqLdITile)
+				iTile[ldTileIdx] <= extData;
+			else
+				dTile[ldTileIdx] <= extData;
+		end
+
+		if(ldTileDn)
+		begin			
+			if(reqLdITile)
+			begin
+				iTileBase[reqLdTileIdx[6:0]] <= reqLdTileBaseLo;
+				iTileBaseHi[reqLdTileIdx[6:0]][9:0] <= reqLdTileBaseHi[9:0];
+			end
+			else
+			begin
+				dTileBase[reqLdTileIdx[6:0]] <= reqLdTileBaseLo;
+				dTileBaseHi[reqLdTileIdx[6:0]][9:0] <= reqLdTileBaseHi[9:0];
+				dTileBaseDty[reqLdTileIdx[6:0]] <= 0;
+			end
+		end
 	end
 end
 

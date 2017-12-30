@@ -1,0 +1,14 @@
+Module Descriptions:
+	Framebuffer and audio will be driven off a 1kHz timer interrupt.
+	
+Audio:
+*	Will submit 2 blocks, encoding 32 samples, each clock tick.
+*	These will be a special type of pipeline register.
+**		Tick will be 1ms, but the size and format of blocks may vary.
+
+Video:
+*	Will provide a 4kB buffer for submitting part of the image frame.
+**		This will need to be roughly synchronized with the raster scan.
+**		240 or 480 vertical resolution will depend on block transmission.
+***		For 240, the same blocks will be sent for both even and odd fields.
+***		For 480, different blocks will be sent for even and odd fields. 

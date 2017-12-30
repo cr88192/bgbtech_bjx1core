@@ -66,10 +66,13 @@ begin
 	tIdRegT[6:0]=0;
 	tIdImm[31:0]=32'h0;
 	idStepPc=opIs32p ? 2'h2 : 2'h1;
+	if(istrWord==0)
+		idStepPc = 1;
 
 	idUopPc[11:0]=12'h0;
 	idUopWord[31:0]=32'h0;
-	idUopWord[23]=1;
+//	idUopWord[23]=1;
+	idUopWord[23]=0;
 
 	srIsDq = regCurSr[12];
 
@@ -84,7 +87,7 @@ begin
 			4'h8:
 			begin
 				idUopWord[31:24]=UOP_FWOP;
-				idUopWord[23:16]=8'b1010_0001;
+				idUopWord[23:16]=8'b0010_0001;
 				idUopWord[15: 0]=istrWord[15: 0];
 			end
 
@@ -94,7 +97,7 @@ begin
 				tIdRegS[3:0]=istrWord[11:8];
 				tIdRegT[3:0]=istrWord[11:8];
 				idUopWord[31:24]=UOP_FWOP;
-				idUopWord[23:16]=8'b1010_0001;
+				idUopWord[23:16]=8'b0010_0001;
 				idUopWord[15: 0]=istrWord[15: 0];
 			end
 
@@ -104,7 +107,7 @@ begin
 				tIdRegS[3:0]=istrWord[11:8];
 				tIdRegT[3:0]=istrWord[11:8];
 				idUopWord[31:24]=UOP_FWOP;
-				idUopWord[23:16]=8'b1010_0001;
+				idUopWord[23:16]=8'b0010_0001;
 				idUopWord[15: 0]=istrWord[15: 0];
 			end
 
@@ -245,6 +248,65 @@ begin
 		tIdImm[ 7:0]=istrWord[7:0];
 		idUopWord[31:24]=srIsDq?UOP_ADDQ:UOP_ADDI;
 	end
+
+	4'h8:
+	begin
+		case(istrWord[11:8])
+
+		case 4'h9:	//BT
+		begin
+			tIdRegD=REG_ZZR;
+			tIdRegS=REG_ZZR;
+			tIdRegT=REG_IMM;
+			tIdImm[31:12]=istrWord[7] ? 20'hFFFFF : 20'h00000 ;
+			tIdImm[11:0]=istrWord[11:0];
+			idUopWord[31:24]=UOP_BRTF;
+			idUopWord[16]=1;	//T/F	(T)
+			idUopWord[17]=1;	//No DS (DS=False)
+		end
+
+		case 4'hB:	//BF
+		begin
+			tIdRegD=REG_ZZR;
+			tIdRegS=REG_ZZR;
+			tIdRegT=REG_IMM;
+			tIdImm[31:12]=istrWord[7] ? 20'hFFFFF : 20'h00000 ;
+			tIdImm[11:0]=istrWord[11:0];
+			idUopWord[31:24]=UOP_BRTF;
+			idUopWord[16]=0;	//T/F	(F)
+			idUopWord[17]=1;	//No DS (DS=False)
+		end
+		
+		case 4'hD:	//BTS
+		begin
+			tIdRegD=REG_ZZR;
+			tIdRegS=REG_ZZR;
+			tIdRegT=REG_IMM;
+			tIdImm[31:12]=istrWord[7] ? 20'hFFFFF : 20'h00000 ;
+			tIdImm[11:0]=istrWord[11:0];
+			idUopWord[31:24]=UOP_BRTF;
+			idUopWord[16]=1;	//T/F	(T)
+			idUopWord[17]=0;	//No DS (DS=True)
+		end
+
+		case 4'hF:	//BFS
+		begin
+			tIdRegD=REG_ZZR;
+			tIdRegS=REG_ZZR;
+			tIdRegT=REG_IMM;
+			tIdImm[31:12]=istrWord[7] ? 20'hFFFFF : 20'h00000 ;
+			tIdImm[11:0]=istrWord[11:0];
+			idUopWord[31:24]=UOP_BRTF;
+			idUopWord[16]=0;	//T/F	(F)
+			idUopWord[17]=0;	//No DS (DS=True)
+		end
+		
+
+		default:
+		begin
+		end
+		endcase
+	end
 	
 	4'hA:
 	begin
@@ -270,11 +332,13 @@ begin
 	4'hE:
 	begin
 		tIdRegD[3:0]=istrWord[11:8];
-		tIdRegS=REG_IMM;
+//		tIdRegS=REG_IMM;
+		tIdRegS=REG_ZZR;
 		tIdRegT=REG_IMM;
 		tIdImm[31:8]=istrWord[7] ? 24'hFFFFFF : 24'h000000 ;
 		tIdImm[ 7:0]=istrWord[7:0];
-		idUopWord[31:24]=srIsDq?UOP_MOVQ:UOP_MOVI;
+//		idUopWord[31:24]=srIsDq?UOP_MOVQ:UOP_MOVI;
+		idUopWord[31:24]=srIsDq?UOP_ADDQ:UOP_ADDI;
 	end
 	
 

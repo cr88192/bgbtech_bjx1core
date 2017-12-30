@@ -6,12 +6,13 @@
 #define PDGL_RIFF_data 0x61746164
 
 int BGBMID_ScaleSample(short *d, int dl, short *s, int sl);
+int BGBMID_ScaleSampleStereo(short *d, int dl, short *s, int sl);
 
-byte *BGBMID_LoadWAV(char *name,
+byte *BGBMID_LoadWAV(const char *name,
 	int *rch, int *rr, int *rbits, int *rlen)
 {
 	static byte tbuf[4096];
-	void *fd;
+	BGBMID_FILE *fd;
 	byte *buf;
 
 	unsigned int tag, len, rsrc, fend, fstrt;
@@ -94,7 +95,7 @@ byte *BGBMID_LoadWAV(char *name,
 			continue;
 		}
 
-		buf=bgbmid_malloc(len+1024);
+		buf=(byte *)bgbmid_malloc(len+1024);
 		bgbmid_fread(buf, 1, len, fd);
 
 		i=chan*(bits/8);
@@ -112,9 +113,10 @@ byte *BGBMID_LoadWAV(char *name,
 	return(buf);
 }
 
-void BGBMID_StoreWAV(char *name, byte *buf, int ch, int rt, int bits, int len)
+void BGBMID_StoreWAV(const char *name,
+	byte *buf, int ch, int rt, int bits, int len)
 {
-	void *fd;
+	BGBMID_FILE *fd;
 	int i;
 
 	fd=bgbmid_fopen(name, "wb");
@@ -160,7 +162,7 @@ void BGBMID_StoreWAV(char *name, byte *buf, int ch, int rt, int bits, int len)
 	bgbmid_fclose(fd);
 }
 
-short *BGBMID_LoadWAV16(char *name,
+short *BGBMID_LoadWAV16(const char *name,
 	int *rch, int *rrt, int *rlen)
 {
 	byte *bpb;
@@ -174,7 +176,7 @@ short *BGBMID_LoadWAV16(char *name,
 	bp=NULL;
 	if(bts==8)
 	{
-		bp=bgbmid_malloc(ch*len*sizeof(short)+1024);
+		bp=(short *)bgbmid_malloc(ch*len*sizeof(short)+1024);
 
 		for(i=0; i<(ch*len); i++)
 		{
@@ -200,7 +202,7 @@ short *BGBMID_LoadWAV16(char *name,
 	return(bp);
 }
 
-short *BGBMID_LoadWAV_Mono16(char *name, int *rrt, int *rlen)
+short *BGBMID_LoadWAV_Mono16(const char *name, int *rrt, int *rlen)
 {
 	byte *bpb;
 	short *bp, *bp1;
@@ -213,7 +215,7 @@ short *BGBMID_LoadWAV_Mono16(char *name, int *rrt, int *rlen)
 	bp=NULL;
 	if(bts==8)
 	{
-		bp=bgbmid_malloc(ch*len*sizeof(short)+1024);
+		bp=(short *)bgbmid_malloc(ch*len*sizeof(short)+1024);
 
 		for(i=0; i<(ch*len); i++)
 		{
@@ -243,7 +245,7 @@ short *BGBMID_LoadWAV_Mono16(char *name, int *rrt, int *rlen)
 
 	if(ch>1)
 	{
-		bp1=bgbmid_malloc(len*sizeof(short));
+		bp1=(short *)bgbmid_malloc(len*sizeof(short));
 		for(i=0; i<len; i++)
 		{
 			k=0;
@@ -263,7 +265,7 @@ short *BGBMID_LoadWAV_Mono16(char *name, int *rrt, int *rlen)
 	return(bp);
 }
 
-short *BGBMID_LoadWAV_44Mono16(char *name, int *rlen)
+short *BGBMID_LoadWAV_44Mono16(const char *name, int *rlen)
 {
 	short *bp, *bp1;
 	int rt, len;
@@ -275,7 +277,7 @@ short *BGBMID_LoadWAV_44Mono16(char *name, int *rlen)
 	if(rt!=44100)
 	{
 		i=len*(44100.0/rt);
-		bp1=bgbmid_malloc(i*sizeof(short));
+		bp1=(short *)bgbmid_malloc(i*sizeof(short));
 
 		BGBMID_ScaleSample(bp1, i, bp, len);
 
@@ -288,7 +290,7 @@ short *BGBMID_LoadWAV_44Mono16(char *name, int *rlen)
 	return(bp);
 }
 
-short *BGBMID_LoadWAV_16Mono16(char *name, int *rlen)
+short *BGBMID_LoadWAV_16Mono16(const char *name, int *rlen)
 {
 	short *bp, *bp1;
 	int rt, len;
@@ -300,7 +302,7 @@ short *BGBMID_LoadWAV_16Mono16(char *name, int *rlen)
 	if(rt!=16000)
 	{
 		i=len*(16000.0/rt);
-		bp1=bgbmid_malloc(i*sizeof(short));
+		bp1=(short *)bgbmid_malloc(i*sizeof(short));
 
 		BGBMID_ScaleSample(bp1, i, bp, len);
 
@@ -313,7 +315,7 @@ short *BGBMID_LoadWAV_16Mono16(char *name, int *rlen)
 	return(bp);
 }
 
-short *BGBMID_LoadWAV_8Mono16(char *name, int *rlen)
+short *BGBMID_LoadWAV_8Mono16(const char *name, int *rlen)
 {
 	short *bp, *bp1;
 	int rt, len;
@@ -325,7 +327,7 @@ short *BGBMID_LoadWAV_8Mono16(char *name, int *rlen)
 	if(rt!=8000)
 	{
 		i=len*(8000.0/rt);
-		bp1=bgbmid_malloc(i*sizeof(short));
+		bp1=(short *)bgbmid_malloc(i*sizeof(short));
 
 		BGBMID_ScaleSample(bp1, i, bp, len);
 
@@ -339,7 +341,7 @@ short *BGBMID_LoadWAV_8Mono16(char *name, int *rlen)
 }
 
 
-short *BGBMID_LoadWAV_RateMono16(char *name, int *rlen, int rate)
+short *BGBMID_LoadWAV_RateMono16(const char *name, int *rlen, int rate)
 {
 	short *bp, *bp1;
 	int rt, len;
@@ -351,7 +353,7 @@ short *BGBMID_LoadWAV_RateMono16(char *name, int *rlen, int rate)
 	if(rt!=rate)
 	{
 		i=len*((rate*1.0)/rt);
-		bp1=bgbmid_malloc(i*sizeof(short));
+		bp1=(short *)bgbmid_malloc(i*sizeof(short));
 
 		BGBMID_ScaleSample(bp1, i, bp, len);
 
@@ -364,13 +366,13 @@ short *BGBMID_LoadWAV_RateMono16(char *name, int *rlen, int rate)
 	return(bp);
 }
 
-short *BGBMID_LoadWAV_32Mono16(char *name, int *rlen)
+short *BGBMID_LoadWAV_32Mono16(const char *name, int *rlen)
 {
 	return(BGBMID_LoadWAV_RateMono16(name, rlen, 32000));
 }
 
 
-short *BGBMID_LoadWAV_Stereo16(char *name, int *rrt, int *rlen)
+short *BGBMID_LoadWAV_Stereo16(const char *name, int *rrt, int *rlen)
 {
 	byte *bpb;
 	short *bp, *bp1;
@@ -383,7 +385,7 @@ short *BGBMID_LoadWAV_Stereo16(char *name, int *rrt, int *rlen)
 	bp=NULL;
 	if(bts==8)
 	{
-		bp=bgbmid_malloc(ch*len*sizeof(short));
+		bp=(short *)bgbmid_malloc(ch*len*sizeof(short));
 
 		for(i=0; i<(ch*len); i++)
 		{
@@ -413,7 +415,7 @@ short *BGBMID_LoadWAV_Stereo16(char *name, int *rrt, int *rlen)
 
 	if(ch==1)
 	{
-		bp1=bgbmid_malloc(len*2*sizeof(short));
+		bp1=(short *)bgbmid_malloc(len*2*sizeof(short));
 		for(i=0; i<len; i++)
 		{
 			k=bp[i];
@@ -430,7 +432,7 @@ short *BGBMID_LoadWAV_Stereo16(char *name, int *rrt, int *rlen)
 	return(bp);
 }
 
-short *BGBMID_LoadWAV_44Stereo16(char *name, int *rlen)
+short *BGBMID_LoadWAV_44Stereo16(const char *name, int *rlen)
 {
 	short *bp, *bp1;
 	int rt, len;
@@ -442,7 +444,7 @@ short *BGBMID_LoadWAV_44Stereo16(char *name, int *rlen)
 	if(rt!=44100)
 	{
 		i=len*(44100.0/rt);
-		bp1=bgbmid_malloc(i*2*sizeof(short));
+		bp1=(short *)bgbmid_malloc(i*2*sizeof(short));
 
 //		BGBMID_ScaleSample(bp1, i, bp, len);
 
@@ -454,6 +456,42 @@ short *BGBMID_LoadWAV_44Stereo16(char *name, int *rlen)
 	*rlen=len;
 	return(bp);
 }
+
+short *BGBMID_LoadWAV_RateStereo16(const char *name, int *rlen, int rate)
+{
+	short *bp, *bp1;
+	int rt, len;
+	int i, j, k;
+
+	bp=BGBMID_LoadWAV_Stereo16(name, &rt, &len);
+	if(!bp)return(NULL);
+
+	if(rt!=rate)
+	{
+		i=len*((rate*1.0)/rt);
+		bp1=(short *)bgbmid_malloc(i*2*sizeof(short));
+
+		BGBMID_ScaleSampleStereo(bp1, i, bp, len);
+
+		bgbmid_free(bp);
+		bp=bp1;
+		len=i;
+	}
+
+	*rlen=len;
+	return(bp);
+}
+
+short *BGBMID_LoadWAV_32Stereo16(const char *name, int *rlen)
+	{ return(BGBMID_LoadWAV_RateStereo16(name, rlen, 32000)); }
+short *BGBMID_LoadWAV_22Stereo16(const char *name, int *rlen)
+	{ return(BGBMID_LoadWAV_RateStereo16(name, rlen, 22050)); }
+short *BGBMID_LoadWAV_16Stereo16(const char *name, int *rlen)
+	{ return(BGBMID_LoadWAV_RateStereo16(name, rlen, 16000)); }
+short *BGBMID_LoadWAV_11Stereo16(const char *name, int *rlen)
+	{ return(BGBMID_LoadWAV_RateStereo16(name, rlen, 11025)); }
+short *BGBMID_LoadWAV_8Stereo16(const char *name, int *rlen)
+	{ return(BGBMID_LoadWAV_RateStereo16(name, rlen, 8000)); }
 
 
 int BGBMID_NormalizeSample(short *dst, short *src, int len)
@@ -499,8 +537,8 @@ int BGBMID_ScaleSampleTrilinear(short *d, int dl, short *s, int sl)
 	tl=1;
 	while(sl>tl)tl<<=1;
 
-	tb=bgbmid_malloc(tl*sizeof(float));
-	tb1=bgbmid_malloc(tl*sizeof(float));
+	tb=(float *)bgbmid_malloc(tl*sizeof(float));
+	tb1=(float *)bgbmid_malloc(tl*sizeof(float));
 
 //	for(i=0; i<sl; i++)
 //		tb[i]=s[i];
@@ -833,12 +871,12 @@ int BGBMID_SampleCompressor(short *db, int dl, short *sb, int sl,
 	int i, j, k, l;
 
 	i=irl*3*sizeof(short);
-	buf1=bgbmid_malloc(i);
-	buf2=bgbmid_malloc(i);
+	buf1=(short *)bgbmid_malloc(i);
+	buf2=(short *)bgbmid_malloc(i);
 	memset(buf1, 0, i);
 	memset(buf2, 0, i);
 
-	buf3=bgbmid_malloc(ivl*sizeof(short));
+	buf3=(short *)bgbmid_malloc(ivl*sizeof(short));
 
 	sp=0; dp=0;
 	while((sp<sl) && (dp<dl))
@@ -884,6 +922,99 @@ int BGBMID_SampleCompressor(short *db, int dl, short *sb, int sl,
 	bgbmid_free(buf2);
 	bgbmid_free(buf3);
 
+	return(0);
+}
+
+
+int BGBMID_ScaleSample2H(short *d, int dl, short *s, int sl)
+{
+	int i, j, k, s1, s2, v;
+	float av0, av1, av2, av3, av4;
+	float w0, w1, w2, w3, w4, wt;
+	float r, p1, p2;
+	float f, g;
+
+	if(dl==sl)
+	{
+		for(i=0; i<sl; i++)d[i*2]=s[i*2];
+		return(0);
+	}
+
+#if 1
+	//upsample, linear
+	if(dl>sl)
+	{
+		r=(((float)(sl-1))/((float)dl));
+		for(i=0; i<dl; i++)
+		{
+			p1=i*r;
+			j=floor(p1);
+			p2=p1-j;
+
+			s1=s[(j  )*2];
+			s2=s[(j+1)*2];
+			v=(s1*(1-p2))+(s2*p2);
+
+			d[i*2]=v;
+		}
+		return(0);
+	}
+#endif
+
+
+	if(1)
+	{
+		s1=s[0];
+		av0=s1;	av1=s1;
+		av2=s1;	av3=s1;
+		av4=s1;
+		
+		r=(((float)(sl-1))/((float)dl));
+		
+		f=(r-1.0)/0.5;		w0=1.0-(f*f);
+		f=(r-2.0)/1.0;		w1=1.0-(f*f);
+		f=(r-4.0)/2.0;		w2=1.0-(f*f);
+		f=(r-8.0)/4.0;		w3=1.0-(f*f);
+		f=(r-16.0)/8.0;		w4=1.0-(f*f);
+		if(w0<0)w0=0;		if(w1<0)w1=0;
+		if(w2<0)w2=0;		if(w3<0)w3=0;
+		if(w4<0)w4=0;
+		wt=w0+w1+w2+w3+w4;
+		if(wt>0)
+			wt=1.0/wt;
+		
+		for(i=0; i<dl; i++)
+		{
+			p1=i*r;
+			j=floor(p1);
+			p2=p1-j;
+
+			s1=s[(j  )*2];
+			s2=s[(j+1)*2];
+			v=(s1*(1-p2))+(s2*p2);
+
+			av0=v;
+			av1=(av1+av0)/2.0;
+			av2=(av2+av1)/2.0;
+			av3=(av3+av2)/2.0;
+			av4=(av4+av3)/2.0;
+			
+			v=(av0*w0+av1*w1+av2*w2+av3*w3+av4*w4)*wt;
+			d[i*2]=v;
+		}
+
+		return(0);
+	}
+
+	//downsample, trilinear
+//	BGBMID_ScaleSampleTrilinear(d, dl, s, sl);
+	return(0);
+}
+
+int BGBMID_ScaleSampleStereo(short *d, int dl, short *s, int sl)
+{
+	BGBMID_ScaleSample2H(d+0, dl, s+0, sl);
+	BGBMID_ScaleSample2H(d+1, dl, s+1, sl);
 	return(0);
 }
 

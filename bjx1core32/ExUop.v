@@ -629,13 +629,16 @@ begin
 				end
 				
 				if(tPipeHold==0)
-					tNextPipeHold=2;
+					tNextPipeHold=1;
 				
 				tPostNextIncr=uopWord[17];
 				tPostNextIncrDir=uopWord[16];
 				
 				if(tPostIncr)
 				begin
+					if(tPipeHold==0)
+						tNextPipeHold=2;
+
 					tNextPostIncrDn=1;
 					if(!tPostIncrDn)
 					begin

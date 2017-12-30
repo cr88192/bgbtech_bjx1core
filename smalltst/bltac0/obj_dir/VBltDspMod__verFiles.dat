@@ -1,0 +1,12 @@
+# DESCRIPTION: Verilator output: Timestamp data for --skip-identical.  Delete at will.
+C "-Wall -CFLAGS -O3 --cc BltDspMod.v --exe sim_dsptst0.cpp"
+S   4889056   662569  1501119882 "/usr/local/bin/verilator_bin"
+S     14731      120  1505596792 "BltDspMod.v"
+T     54259      133  1505663298 "obj_dir/VBltDspMod.cpp"
+T      7434      132  1505663298 "obj_dir/VBltDspMod.h"
+T      2008      135  1505663298 "obj_dir/VBltDspMod.mk"
+T       594      131  1505663298 "obj_dir/VBltDspMod__Syms.cpp"
+T       984      130  1505663298 "obj_dir/VBltDspMod__Syms.h"
+T       254      136  1505663298 "obj_dir/VBltDspMod__ver.d"
+T         0        0  1505663298 "obj_dir/VBltDspMod__verFiles.dat"
+T      1097      134  1505663298 "obj_dir/VBltDspMod_classes.mk"

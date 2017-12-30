@@ -23,6 +23,10 @@ Op16 Forms:
   Forward an SH op to the uOp decoder.
   Used for opcodes that are special-cases.
 
+BRTF Form:  0101-0000 z000-00nt xxxx-xxxx xxxx-xxxx
+	N: No Delay Slot
+	T: True/False
+
  */
 
 
@@ -109,6 +113,8 @@ parameter[7:0] UOP_FCMPGTS	= 8'h4B;
 parameter[7:0] UOP_FCNVSI	= 8'h4E;
 parameter[7:0] UOP_FCNVIS	= 8'h4F;
 
+parameter[7:0] UOP_BRTF		= 8'h50;	//Branch BT/BF/BTS/BFS
+
 parameter[7:0] UOP_FADDD	= 8'h51;
 parameter[7:0] UOP_FSUBD	= 8'h52;
 parameter[7:0] UOP_FMULD	= 8'h53;
@@ -135,25 +141,9 @@ parameter[7:0] UOP_FCNVID	= 8'h5F;
 `include "MemTile2.v"
 `include "DecOp.v"
 
-/*
-module ExUop(
-	clk,
-	idInstWord,
-	uopWord,
-	uopCmd,
-	idRegD,
-	idRegS,
-	idRegT,
-	idImm
-	);
-*/
-
 module ExUop(clk, reset,
-	
-	extAddr,
-	extData,
-	extOE,
-	extWR,
+	extAddr,	extData,
+	extOE,		extWR,
 	extNotReady);
 
 input clk;			//clock
@@ -177,11 +167,11 @@ input[6:0] idRegT;	//Source Opcode T
 input[31:0] idImm;	//Source Immediate
 */
 
+/* Stage 1: IF, Fetch */
+reg[63:0]	ifRegPc;		//PC at point instr was read
 
-reg[31:0]	uopWord;		//uop word
-reg[31:0]	uopNextWord;	//uop word
-reg[7:0]	uopCmd;			//uop command
 
+/* Stage 2: ID, Decode */
 reg[31:0]	idNextInstWord;	//source instruction word
 
 reg[31:0]	idInstWord;		//source instruction word
@@ -191,17 +181,27 @@ reg[6:0]	idRegT;			//Source Opcode T (or M)
 reg[31:0]	idImm;			//Source Immediate
 reg[11:0]	idUopPc;		//Instruction Uop PC
 reg[31:0]	idUopWord;		//uop word
+reg[63:0]	idRegPc;		//PC at point instr was read
+reg[63:0]	idRegNextPc;	//Next PC at point instr was read
 
 
-reg[6:0] ixRegD;	//Source Opcode D (or N)
-reg[6:0] ixRegS;	//Source Opcode S (N or M)
-reg[6:0] ixRegT;	//Source Opcode T (M)
-reg[31:0] ixImm;	//Source Immediate
+/* Stage 3: EX, Execute */
 
-reg[6:0] iRegD;		//Ex Opcode D (or N)
-reg[6:0] iRegS;		//Ex Opcode S (N or M)
-reg[6:0] iRegT;		//Ex Opcode T (M)
-reg[31:0] iImm;		//Ex Immediate
+reg[31:0]	uopWord;		//uop word
+reg[31:0]	uopNextWord;	//uop word
+reg[7:0]	uopCmd;			//uop command
+
+reg[6:0]	ixRegD;			//Source Opcode D (or N)
+reg[6:0]	ixRegS;			//Source Opcode S (N or M)
+reg[6:0]	ixRegT;			//Source Opcode T (M)
+reg[31:0]	ixImm;			//Source Immediate
+reg[63:0]	ixRegPc;		//PC at point instr was read
+reg[63:0]	ixRegNextPc;	//PC at point instr was read
+
+reg[6:0] iRegD;				//Ex Opcode D (or N)
+reg[6:0] iRegS;				//Ex Opcode S (N or M)
+reg[6:0] iRegT;				//Ex Opcode T (M)
+reg[31:0] iImm;				//Ex Immediate
 
 reg[63:0] iDataD;
 reg[63:0] iDataS;
@@ -222,7 +222,7 @@ reg oIsQw2D;
 // MemAlu agu1;
 // reg[63:0] iRgDataT;
 GpReg regs(clk,
-		oIsWr2D, oIsWr2D, oIdReg2D, oData2D,
+		oIsWr2D, oIsQw2D, oIdReg2D, oData2D,
 		iRegD, iDataD, iRegS, iDataS, iRegT, iDataT);
 
 reg[63:0] iDataAluS;
@@ -235,6 +235,7 @@ reg[63:0] regNextSr;
 reg[63:0] regPc;
 reg[63:0] regNextPc;
 reg[63:0] regPrNextPc;
+reg[63:0] regPrPc;
 
 reg[63:0] regPr;
 reg[63:0] regNextPr;
@@ -313,13 +314,43 @@ reg[63:0]	tRegStepPc;
 reg[11:0]	uopPc;
 reg[11:0]	uopNextPc;
 reg			uopPcLive;
+reg			uopNextPcLive;
 
-assign	regPc=regs.reg_pc;
-assign	regPr=regs.reg_pr;
-assign	regSr=regs.reg_sr;
+reg[15:0]	tResetMagic;
+reg			tResetOK;
+reg			tHold;
+
+reg[2:0]	tPipeFlush;
+reg[2:0]	tNextPipeFlush;
+
+reg			tPipeDsFlush;
+reg			tNextPipeDsFlush;
+
+assign	tResetOK = !reset && (tResetMagic==12345);
+assign	tHold = !tResetOK && !memHold;
+
+assign	regPc = regs.reg_pc;
+assign	regPr = regs.reg_pr;
+assign	regSr = regs.reg_sr;
 
 always @ (clk)
 begin
+	if(!tResetOK)
+	begin
+		$display("Reset");
+	end
+	else if(tHold)
+	begin
+		$display("Hold");
+	end
+	else
+//	if((memHold==0) && tResetOK)
+	if((memHold==0) && tResetOK)
+//	if((clk!=0) && (memHold==0) && tResetOK)
+	begin	/* Hold */
+	
+//	$display("Ex %X", clk);
+	
 	/* Common */
 //	regPc[31: 0]=regs.sreg_lo[regs.SREG_PC];
 //	regPc[63:32]=regs.sreg_hi[regs.SREG_PC];
@@ -331,8 +362,9 @@ begin
 //	regSr=regs.reg_sr;
 
 	/* Stage 1: Fetch */
-	imemAddr[47:0]=regPc[47:0];
-	imemRd=!uopPcLive;
+//	imemAddr[47:0]=regPc[47:0];
+//	imemRd=!uopPcLive;
+//	imemRd=1'b1;
 
 	if(!uopPcLive)
 	begin
@@ -341,6 +373,13 @@ begin
 //		imemRd=1'b1;
 //		imemWr=1'b0;
 		idNextInstWord=imemRdValue[31:0];
+		$display("1F: PC=%X Op=%X", ifRegPc, idNextInstWord);
+//		$display("1F: PC=%X Op=%X", imemAddr, imemRdValue);
+
+		if(imemRdValue==0)
+			idNextInstWord=32'hFFFF_FFFF;
+//		idRegNextPc=imemAddr;
+		idRegNextPc=ifRegPc;
 	end
 	else
 	begin
@@ -358,32 +397,87 @@ begin
 	tRegStepPc[2:1]=idStepPc[1:0];
 	tRegStepPc[0]=1'b0;
 
-	if(!uopPcLive)
+//	if(tPipeFlush!=0)
+	if(tPipeFlush>1)
 	begin
+		$display("2D-0/F: PC=%X Op=%X St=%X", idRegPc, idInstWord, idStepPc);
+		$display("2D-1/F: uPC=%X uOp=%X", idUopPc, idUopWord);
+
+		regNextPc=regPc;
+		regPrNextPc=regPc+4;
+
 		uopNextPc=idUopPc;
 		uopNextWord=idUopWord;
-		regNextPc=regPc+tRegStepPc;
-		regPrNextPc=regPc+tRegStepPc;
+		ixRegNextPc=idRegPc;
+	end
+	else
+	if(!uopPcLive)
+	begin
+		$display("2D-0: PC=%X Op=%X St=%X", idRegPc, idInstWord, idStepPc);
+		$display("2D-1: uPC=%X uOp=%X", idUopPc, idUopWord);
+		
+//		if(idInstWord==0)
+//			$finish(0);
+
+		if(idInstWord==32'hFFFF_FFFF)
+			$finish(0);
+	
+		uopNextPc=idUopPc;
+		uopNextWord=idUopWord;
+		regNextPc=ifRegPc+tRegStepPc;
+		regPrNextPc=ifRegPc+tRegStepPc;
+//		regPrNextPc=ifRegPc;
+
+		ixRegNextPc=idRegPc;
 	end
 	else
 	begin
+		if(!memHold)
+		begin
+			$display("2D-2 uPC=%X uOp=%X", idUopPc, idUopWord);
+		end
+
 		regNextPc=regPc;
-		regPrNextPc=regPc+tRegStepPc;
+		regPrNextPc=regPc+4;
+
+//		regNextPc=idRegPc;
+//		regPrNextPc=idRegPc+tRegStepPc;
+//		regPrNextPc=idRegPc;
 	end
 
+
 	/* Stage 3+0: Execute */
-	
-	if(uopWord[23])
+
+	uopCmd=uopWord[31:24];
+
+	if(tPipeFlush!=0)
 	begin
-//		uopPcLive=0;
+		tNextPipeFlush=tPipeFlush-1;
+		tNextPipeDsFlush=tPipeDsFlush;
+//		uopCmd=0;
+	end
+	else
+	begin
+		tNextPipeFlush=0;
+		tNextPipeDsFlush=0;
+	end
+
+	$display("3E-0: PC=%X", ixRegPc);
+	$display("3E-1 uPC=%X uOp=%X", uopPc, uopWord);
+	
+	if(uopWord[23]==0)
+	begin
+		uopNextPcLive=0;
 	end
 	else
 	begin
 		uopNextPc=uopPc+1;
 		uopNextWord=dec1.uopPgm[uopNextPc];
-//		uopPcLive=1;
+		uopNextPcLive=1;
 	end
-	uopCmd=uopWord[31:24];
+
+	if(tPipeFlush!=0)
+		uopNextPcLive=0;
 
 	case(uopWord[22:21])
 		2'b00:
@@ -440,6 +534,11 @@ begin
 
 	iDataAluS=iDataS;
 	iDataAluT=iDataT;
+
+	if(iRegS==regs.REG_ZZR)
+	begin
+		iDataAluS[63: 0] = 0;
+	end
 	if(iRegT==regs.REG_IMM)
 	begin
 		iDataAluT[63:32] = iImm[31] ? (-1) : 0;
@@ -463,12 +562,14 @@ begin
 	fpuCmd=0;
 	fpuOpFp32=0;
 	
+	$display("Uop Cmd %X", uopCmd);
 
 	case(uopCmd[7:4])
 		4'h0:
 		begin
 			if(uopCmd[3:0]==4'h0)
 			begin
+				uopNextPcLive = 0;
 			end
 			else
 			begin
@@ -481,6 +582,13 @@ begin
 					regNextSr[31:1]=regSr[31:1];
 					regNextSr[0]=tAluSr[0];
 				end
+
+				$display("EX ALU.L Op=%X D=%X(%X) S=%X(%X) T=%X(%X) -> %X",
+					aluCmd,
+					iRegD, iDataD,
+					iRegS, iDataAluS,
+					iRegT, iDataAluT,
+					tDataAluD);
 			end
 		end
 
@@ -508,7 +616,10 @@ begin
 		begin
 			if(uopCmd[3:0]==4'h0)
 			begin
-				regNextPc = regPrNextPc + (iDataT*2);
+				regNextPc = regPrPc + (iDataAluT*2);
+				tNextPipeFlush = 2;
+				$display("3E BRA PC=%X -> %X (Disp=%X)",
+					regPrPc, regNextPc, iDataAluT);
 			end
 			else
 			begin
@@ -535,7 +646,10 @@ begin
 			if(uopCmd[3:0]==4'h0)
 			begin
 				regNextPr = regPrNextPc;
-				regNextPc = regPrNextPc + (iDataT*2);
+				regNextPc = regPrNextPc + (iDataAluT*2);
+				tNextPipeFlush = 2;
+				$display("3E BSR PC=%X -> %X (Disp=%X)",
+					regPrPc, regNextPc, iDataAluT);
 			end
 			else
 			begin
@@ -570,6 +684,7 @@ begin
 		begin
 			if(uopCmd[3:0]==4'h0)
 			begin
+				/* Forward Op */
 			end
 			else
 			begin
@@ -590,7 +705,14 @@ begin
 		begin
 			if(uopCmd[3:0]==4'h0)
 			begin
-
+				if((regSr[0]^uopWord[16])==0)
+				begin
+					regNextPc = regPrPc + (iDataAluT*2);
+					tNextPipeFlush = 2;
+					tNextPipeDsFlush = uopWord[17];
+					$display("3E BRTF PC=%X -> %X (Disp=%X)",
+						regPrPc, regNextPc, iDataAluT);
+				end
 			end
 			else
 			begin
@@ -694,44 +816,133 @@ begin
 		end
 		endcase
 	end
+	
+	end	/* Hold */
+end
+
+/* 
+always @ (negedge clk)
+begin
+	if(tResetOK==0)
+	begin
+		imemAddr[47:0]	<= 0;
+		imemRd			<= 1'b1;
+	end
+	else
+	begin
+		imemAddr[47:0]	<= regNextPc[47:0];
+//		imemAddr[47:0]	<= regPc[47:0];
+		imemRd			<= 1'b1;
+//		ifRegPc			<= regPc;
+		ifRegPc			<= regNextPc;
+	end
+end
+*/
+
+always @ (negedge clk)
+begin
+		oData2D    <= tData2D;
+		oIsWr2D    <= tIsWr2D;
+		oIsQw2D    <= tIsQw2D;
+		oIdReg2D   <= tIdReg2D;
 end
 
 always @ (posedge clk)
 begin
 
-	/* Common */
-//	regs.creg_lo[regs.CREG_SR] <= regNextSr[31: 0];
-//	regs.creg_hi[regs.CREG_SR] <= regNextSr[63:32];
-//	regs.sreg_lo[regs.SREG_PC] <= regNextPc[31: 0];
-//	regs.sreg_hi[regs.SREG_PC] <= regNextPc[63:32];
+	if(memHold || !tResetOK)
+	begin
+		if(!reset)
+			tResetMagic		<= 12345;
+		else
+			tResetMagic		<= 0;
 
-//	regSr       <= regNextSr;
-//	regPc       <= regNextPc;
-//	regPr       <= regNextPr;
-	regs.reg_sr <= regNextSr;
-	regs.reg_pc <= regNextPc;
-	regs.reg_pr <= regNextPr;
+		if(!tResetOK)
+		begin
+			regs.reg_sr <= 0;
+			regs.reg_pc <= 0;
+			regs.reg_pr <= 0;
+
+			imemAddr[47:0]	<= 0;
+			imemRd			<= 1'b1;
+		end
+	end
+
+	else
+
+	begin
+//		$display("La");
+
+		/* Common */
+	//	regs.creg_lo[regs.CREG_SR] <= regNextSr[31: 0];
+	//	regs.creg_hi[regs.CREG_SR] <= regNextSr[63:32];
+	//	regs.sreg_lo[regs.SREG_PC] <= regNextPc[31: 0];
+	//	regs.sreg_hi[regs.SREG_PC] <= regNextPc[63:32];
+
+	//	regSr			<= regNextSr;
+	//	regPc			<= regNextPc;
+	//	regPr			<= regNextPr;
+		regs.reg_sr		<= regNextSr;
+		regs.reg_pc		<= regNextPc;
+		regs.reg_pr		<= regNextPr;
+
+		tPipeFlush		<= tNextPipeFlush;
+		tPipeDsFlush	<= tNextPipeDsFlush;
+
+		/* Stage 1 */
+
+//		imemAddr[47:0]	<= regNextPc[47:0];
+//		imemRd			<= 1'b1;
+
+		imemAddr[47:0]	<= regNextPc[47:0];
+		imemRd			<= 1'b1;
+		ifRegPc			<= regNextPc;
 
 
-	/* Stage 1->2 */
-	idInstWord  <= idNextInstWord;
+		/* Stage 1->2 */
+		
+//		if(tPipeFlush!=0)
+//		if(tPipeFlush>1)
+		if((tPipeFlush>1) || (tPipeDsFlush!=0))
+		begin
+//			idInstWord		<= idNextInstWord;
+			idInstWord		<= 32'h0F090F09;
+			idRegPc			<= ifRegPc;
+		end
+		else
+		if(tPipeFlush!=0)
+		begin
+			idInstWord		<= imemRdValue[31:0];
+			idRegPc			<= ifRegPc;
+		end
+		else
+		begin
+//			idInstWord		<= idNextInstWord;
+			idInstWord		<= imemRdValue[31:0];
+			idRegPc			<= idRegNextPc;
+		end
 
-	/* Stage 2->3 */
-	ixRegD      <= idRegD;
-	ixRegS      <= idRegS;
-	ixRegT      <= idRegT;
-	ixImm       <= idImm;
 
-	/* Stage 3+0 */
-	uopPc      <= uopNextPc;
-	uopWord    <= uopNextWord;
-	uopPcLive  <= !uopNextWord[23];
+		/* Stage 2->3 */
+		ixRegD			<= idRegD;
+		ixRegS			<= idRegS;
+		ixRegT			<= idRegT;
+		ixImm			<= idImm;
+		ixRegPc			<= ixRegNextPc;
+		regPrPc			<= regPrNextPc;
 
-	/* Stage 3+1 */
-	oData2D    <= tData2D;
-	oIsWr2D    <= tIsWr2D;
-	oIsQw2D    <= tIsQw2D;
-	oIdReg2D   <= tIdReg2D;
+
+		/* Stage 3+0 */
+		uopPc      <= uopNextPc;
+		uopWord    <= uopNextWord;
+		uopPcLive  <= uopNextPcLive;
+
+		/* Stage 3+1 */
+//		oData2D    <= tData2D;
+//		oIsWr2D    <= tIsWr2D;
+//		oIsQw2D    <= tIsQw2D;
+//		oIdReg2D   <= tIdReg2D;
+	end
 end
 
 endmodule
