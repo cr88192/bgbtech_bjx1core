@@ -1460,6 +1460,7 @@ begin
 					opRegT=UREG_MR_IMM;	opImm=opImm_Zx4;
 				end
 
+// /*
 				UXFORMZX_RM3: begin
 					opRegN=UREG_R15;
 					opRegS={3'h0, 1'b1, opCmdWord[6:4]};
@@ -1489,6 +1490,7 @@ begin
 					opRegS=UREG_R15;
 					opRegT=UREG_MR_IMM;	opImm=opImm_Zx4;
 				end
+// */
 
 				UXFORMZX_RM0: begin
 					opRegN=opRegM_Dfl;	opRegS=UREG_R0;
