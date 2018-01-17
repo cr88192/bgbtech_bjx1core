@@ -52,8 +52,11 @@ wire[63:0] fpaSrcB;
 wire[63:0] fpaDst;
 FpuFpD_Add fpadd(clk, fpaIsEn, fpaIsSub, fpaSrcA, fpaSrcB, fpaDst);
 
-assign fpaSrcA = ((opMode==UCMD_FPU_MAC) || (opMode==UCMD_FPU_MSC)) ? fcSrcC : fcSrcA;
-assign fpaSrcB = ((opMode==UCMD_FPU_MAC) || (opMode==UCMD_FPU_MSC)) ? fpmDst : fcSrcB;
+// assign fpaSrcA = ((opMode==UCMD_FPU_MAC) || (opMode==UCMD_FPU_MSC)) ? fcSrcC : fcSrcA;
+// assign fpaSrcB = ((opMode==UCMD_FPU_MAC) || (opMode==UCMD_FPU_MSC)) ? fpmDst : fcSrcB;
+
+assign fpaSrcA = fcSrcA;
+assign fpaSrcB = fcSrcB;
 
 wire[63:0] fpmSrcB;
 wire[63:0] fpmDst;
@@ -117,6 +120,7 @@ begin
 			tDst = 0;
 		end
 
+/*
 		UCMD_FPU_ADD: begin
 			fpaIsEn = 1;
 			tDst = fpaDst;
@@ -129,8 +133,8 @@ begin
 		end
 		UCMD_FPU_MUL: begin
 			fpaIsEn = 1;
-			tDst = fpmDst;
-			tIdRegD = idRegC;
+//			tDst = fpmDst;
+//			tIdRegD = idRegC;
 		end
 
 		UCMD_FPU_ABS: begin
@@ -159,15 +163,15 @@ begin
 		end
 
 		UCMD_FPU_MAC: begin
-			fpaIsEn = 1;
-			tDst = fpaDst;
-			tIdRegD = idRegC;
+//			fpaIsEn = 1;
+//			tDst = fpaDst;
+//			tIdRegD = idRegC;
 		end
 
 		UCMD_FPU_MSC: begin
-			fpaIsEn = 1;
-			tDst = fpaDst;
-			tIdRegD = idRegC;
+//			fpaIsEn = 1;
+//			tDst = fpaDst;
+//			tIdRegD = idRegC;
 		end
 
 		UCMD_FPU_CMPEQ: begin
@@ -208,14 +212,17 @@ begin
 		UCMD_FPU_CNVSI: begin
 			fpCnvifEn = 1;
 //			tFpul = fpCnvbDstI[31:0];
-			tDst = fpCnvbDstI;
-			tIdRegD = idRegC;
+
+//			tDst = fpCnvbDstI;
+//			tIdRegD = idRegC;
+//			tIdModeD = 2;
 		end
 		UCMD_FPU_CNVIS: begin
 			fpCnvifEn = 1;
 			tDst = fpCnvbDstF;
 			tIdRegD = idRegC;
 		end
+*/
 
 		default: begin
 //			tDst = fcSrcB;

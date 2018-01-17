@@ -41,9 +41,13 @@ begin
 	end
 	else
 	begin
-		exb=exa+(1023-127);
+//		exb=exa+(1023-127);
 		tDst[63]=src[31];
-		tDst[62:52]=exb[10:0];
+//		tDst[62:52]=exb[10:0];
+
+		tDst[62:59]=exa[7] ? 4'b1000 : 4'b0111;
+		tDst[58:52]=exa[6:0];
+
 		tDst[51:29]=src[22:0];
 		tDst[28:0]=0;
 	end

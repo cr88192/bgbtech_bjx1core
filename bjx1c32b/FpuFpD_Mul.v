@@ -69,7 +69,10 @@ begin
 	tFracC1=tFracA*tFracB;
 	tFracC=tFracC1[105:42]+64'h3FF;
 `else	
-	tFracC=(tFracA>>21)*(tFracB>>21);
+//	tFracC=(tFracA>>21)*(tFracB>>21);
+	tFracC=
+		{21'h0, tFracA[63:21]} *
+		{21'h0, tFracB[63:21]};
 `endif
 
 	if(tFracC[63])

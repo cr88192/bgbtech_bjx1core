@@ -47,16 +47,20 @@ output[31:0]	ctlOutFpul;		//FPUL out
 reg[31:0]		regFprH[15:0];		//FR0, FR2, FR4, ...
 reg[31:0]		regFprL[15:0];		//FR1, FR3, FR5, ...
 
+/* verilator lint_off UNOPTFLAT */
+
 reg[31:0]		tRegValRsF;
 reg[31:0]		tRegValRtF;
 reg[31:0]		tRegValRmF;
 
-reg[63:0]		tRegValRsD;
-reg[63:0]		tRegValRtD;
-reg[63:0]		tRegValRmD;
+wire[63:0]		tRegValRsD;
+wire[63:0]		tRegValRtD;
+wire[63:0]		tRegValRmD;
+
+/* verilator lint_on UNOPTFLAT */
 
 // reg[63:0]		tRegValRnD;
-reg[31:0]		tRegValRnF;
+wire[31:0]		tRegValRnF;
 reg[31:0]		tRegValRnF2;
 
 reg[63:0]		tRegValRs;
@@ -94,15 +98,22 @@ begin
 	tRegValRm=0;
 
 	tRegValRsF=0;
-	tRegValRsD=0;
+//	tRegValRsD=0;
 	tRegValRtF=0;
-	tRegValRtD=0;
+//	tRegValRtD=0;
 	tRegValRmF=0;
-	tRegValRmD=0;
+//	tRegValRmD=0;
 	
-	tFpul = ctlInFpul;
+//	tFpul = ctlInFpul;
 //	tRegValRnD = regValRn;
 
+	cvtF32To64=0;
+	accF32Raw=1;
+
+	cvtStF32To64=0;
+	accStF32Raw=1;
+
+/*
 	case(regMode)
 		2'b00: begin		//Float
 			cvtF32To64=1;
@@ -121,7 +132,9 @@ begin
 			accF32Raw=0;
 		end
 	endcase
+*/
 
+/*
 	case(regStMode)
 		2'b00: begin		//Float
 			cvtStF32To64=1;
@@ -140,6 +153,7 @@ begin
 			accStF32Raw=0;
 		end
 	endcase
+*/
 
 	if(regIdRs[6:5]==2'b10)
 	begin
@@ -158,6 +172,13 @@ begin
 			tRegValRs[31: 0]=regFprL[regIdRs[4:1]];
 			tRegValRs[63:32]=regFprH[regIdRs[4:1]];
 		end
+	end
+	else if(regIdRs==UREG_FPUL)
+	begin
+		tRegValRsF = ctlInFpul;
+		tRegValRs = tRegValRtD;
+		if(accF32Raw)
+			tRegValRs[31:0]=ctlInFpul[31:0];
 	end
 
 	if(regIdRt[6:5]==2'b10)
@@ -205,6 +226,7 @@ begin
 		end
 	end
 
+ /*
 	if(regIdRn==UREG_FPUL)
 	begin
 		case(regStMode)
@@ -214,6 +236,9 @@ begin
 			2'b11:	tFpul = regValRn[31:0];
 		endcase
 	end
+//	else
+//		tFpul = ctlInFpul;
+ */
 
 	if(cvtStF32To64 || accStF32Raw)
 	begin
@@ -241,6 +266,19 @@ begin
 			regFprH[regIdRn[4:1]] <= regValRn[63:32];
 		end
 	end
+
+	if(regIdRn==UREG_FPUL)
+	begin
+		case(regStMode)
+			2'b00:	tFpul <= tRegValRnF2;
+			2'b01:	tFpul <= tRegValRnF2;
+			2'b10:	tFpul <= regValRn[31:0];
+			2'b11:	tFpul <= regValRn[31:0];
+		endcase
+	end
+	else
+		tFpul <= ctlInFpul;
+
 end
 
 
