@@ -106,6 +106,7 @@ assign		oregSp		= regSp;
 
 
 reg			regSrRB;
+reg			nxtRegSrRB;
 reg[31:0]	tRegValRs;
 reg[31:0]	tRegValRt;
 reg[31:0]	tRegValRn;
@@ -144,7 +145,7 @@ reg[31:0]	regGprR14;
 
 // reg[31:0]	regGprR7A;
 
-
+/*
 reg[31:0]	nxtRegGprR0A;
 reg[31:0]	nxtRegGprR1A;
 reg[31:0]	nxtRegGprR2A;
@@ -170,7 +171,7 @@ reg[31:0]	nxtRegGprR11;
 reg[31:0]	nxtRegGprR12;
 reg[31:0]	nxtRegGprR13;
 reg[31:0]	nxtRegGprR14;
-
+*/
 
 assign regValRs = tRegValRs;
 assign regValRt = tRegValRt;
@@ -178,13 +179,16 @@ assign regValRn = tRegValRn;
 
 always @*
 begin
-	tRegValRs=0;
-	tRegValRt=0;
-	tRegValRn=0;
+	tRegValRs=UV32_XX;
+	tRegValRt=UV32_XX;
+	tRegValRn=UV32_XX;
 
-	regSrRB=regSrVal[29];
+//	regSrRB=regSrVal[29];
+//	regSrRB=0;
+	nxtRegSrRB=regSrVal[29];
 
 	case(regIdRs)
+/*
 		UREG_R0:	tRegValRs=regSrRB?regGprR0B:regGprR0A;
 		UREG_R1:	tRegValRs=regSrRB?regGprR1B:regGprR1A;
 		UREG_R2:	tRegValRs=regSrRB?regGprR2B:regGprR2A;
@@ -193,6 +197,18 @@ begin
 		UREG_R5:	tRegValRs=regSrRB?regGprR5B:regGprR5A;
 		UREG_R6:	tRegValRs=regSrRB?regGprR6B:regGprR6A;
 		UREG_R7:	tRegValRs=regSrRB?regGprR7B:regGprR7A;
+*/
+
+// /*
+		UREG_R0:	tRegValRs=regGprR0A;
+		UREG_R1:	tRegValRs=regGprR1A;
+		UREG_R2:	tRegValRs=regGprR2A;
+		UREG_R3:	tRegValRs=regGprR3A;
+		UREG_R4:	tRegValRs=regGprR4A;
+		UREG_R5:	tRegValRs=regGprR5A;
+		UREG_R6:	tRegValRs=regGprR6A;
+		UREG_R7:	tRegValRs=regGprR7A;
+// */
 
 		UREG_R8:	tRegValRs=regGprR8;
 		UREG_R9:	tRegValRs=regGprR9;
@@ -210,6 +226,7 @@ begin
 //		end
 
 		UREG_MR_IMM:	tRegValRs = idImm;
+		UREG_ZZR:	tRegValRs = 0;
 
 		UREG_MACH:	tRegValRs = regMac[63:32];
 		UREG_MACL:	tRegValRs = regMac[31: 0];
@@ -225,18 +242,18 @@ begin
 		UREG_SPC:	tRegValRs = regSPc;
 		UREG_PC:	tRegValRs = regPc;
 
-		default:	tRegValRs=0;
+		default:	tRegValRs=UV32_XX;
 	endcase
 
 	case(regIdRt)
-		UREG_R0:	tRegValRt=regSrRB?regGprR0B:regGprR0A;
-		UREG_R1:	tRegValRt=regSrRB?regGprR1B:regGprR1A;
-		UREG_R2:	tRegValRt=regSrRB?regGprR2B:regGprR2A;
-		UREG_R3:	tRegValRt=regSrRB?regGprR3B:regGprR3A;
-		UREG_R4:	tRegValRt=regSrRB?regGprR4B:regGprR4A;
-		UREG_R5:	tRegValRt=regSrRB?regGprR5B:regGprR5A;
-		UREG_R6:	tRegValRt=regSrRB?regGprR6B:regGprR6A;
-		UREG_R7:	tRegValRt=regSrRB?regGprR7B:regGprR7A;
+		UREG_R0:	tRegValRt=regGprR0A;
+		UREG_R1:	tRegValRt=regGprR1A;
+		UREG_R2:	tRegValRt=regGprR2A;
+		UREG_R3:	tRegValRt=regGprR3A;
+		UREG_R4:	tRegValRt=regGprR4A;
+		UREG_R5:	tRegValRt=regGprR5A;
+		UREG_R6:	tRegValRt=regGprR6A;
+		UREG_R7:	tRegValRt=regGprR7A;
 
 		UREG_R8:	tRegValRt=regGprR8;
 		UREG_R9:	tRegValRt=regGprR9;
@@ -248,33 +265,34 @@ begin
 		UREG_R15:	tRegValRt=regSp;
 
 		UREG_MR_IMM:	tRegValRt = idImm;
+		UREG_ZZR:	tRegValRt = 0;
 
-		UREG_MACH:	tRegValRt = regMac[63:32];
-		UREG_MACL:	tRegValRt = regMac[31: 0];
-		UREG_PR:	tRegValRt = regPr;
-		UREG_SGR:	tRegValRt = regSGr;
-		UREG_FPUL:	tRegValRt = regFpul;
-		UREG_FPSCR:	tRegValRt = regFpScr;
+//		UREG_MACH:	tRegValRt = regMac[63:32];
+//		UREG_MACL:	tRegValRt = regMac[31: 0];
+//		UREG_PR:	tRegValRt = regPr;
+//		UREG_SGR:	tRegValRt = regSGr;
+//		UREG_FPUL:	tRegValRt = regFpul;
+//		UREG_FPSCR:	tRegValRt = regFpScr;
 
-		UREG_SR:	tRegValRt = regSr;
-		UREG_GBR:	tRegValRt = regGbr;
-		UREG_VBR:	tRegValRt = regVbr;
-		UREG_SSR:	tRegValRt = regSSr;
-		UREG_SPC:	tRegValRt = regSPc;
-		UREG_PC:	tRegValRt = regPc;
+//		UREG_SR:	tRegValRt = regSr;
+//		UREG_GBR:	tRegValRt = regGbr;
+//		UREG_VBR:	tRegValRt = regVbr;
+//		UREG_SSR:	tRegValRt = regSSr;
+//		UREG_SPC:	tRegValRt = regSPc;
+//		UREG_PC:	tRegValRt = regPc;
 
-		default:	tRegValRt=0;
+		default:	tRegValRt=UV32_XX;
 	endcase
 
 	case(regIdRn)
-		UREG_R0:	tRegValRn=regSrRB?regGprR0B:regGprR0A;
-		UREG_R1:	tRegValRn=regSrRB?regGprR1B:regGprR1A;
-		UREG_R2:	tRegValRn=regSrRB?regGprR2B:regGprR2A;
-		UREG_R3:	tRegValRn=regSrRB?regGprR3B:regGprR3A;
-		UREG_R4:	tRegValRn=regSrRB?regGprR4B:regGprR4A;
-		UREG_R5:	tRegValRn=regSrRB?regGprR5B:regGprR5A;
-		UREG_R6:	tRegValRn=regSrRB?regGprR6B:regGprR6A;
-		UREG_R7:	tRegValRn=regSrRB?regGprR7B:regGprR7A;
+		UREG_R0:	tRegValRn=regGprR0A;
+		UREG_R1:	tRegValRn=regGprR1A;
+		UREG_R2:	tRegValRn=regGprR2A;
+		UREG_R3:	tRegValRn=regGprR3A;
+		UREG_R4:	tRegValRn=regGprR4A;
+		UREG_R5:	tRegValRn=regGprR5A;
+		UREG_R6:	tRegValRn=regGprR6A;
+		UREG_R7:	tRegValRn=regGprR7A;
 
 		UREG_R8:	tRegValRn=regGprR8;
 		UREG_R9:	tRegValRn=regGprR9;
@@ -285,7 +303,9 @@ begin
 		UREG_R14:	tRegValRn=regGprR14;
 		UREG_R15:	tRegValRn=regSp;
 
-		default:	tRegValRn=0;
+		UREG_GBR:	tRegValRn = regGbr;
+
+		default:	tRegValRn=UV32_XX;
 	endcase
 
 
@@ -317,22 +337,14 @@ begin
 	nxtRegGprR14 = regGprR14;
 
 	case(regIdRn)
-		UREG_R0:	if(regSrRB)		nxtRegGprR0B=regValRo;
-					else			nxtRegGprR0A=regValRo;
-		UREG_R1:	if(regSrRB)		nxtRegGprR1B=regValRo;
-					else			nxtRegGprR1A=regValRo;
-		UREG_R2:	if(regSrRB)		nxtRegGprR2B=regValRo;
-					else			nxtRegGprR2A=regValRo;
-		UREG_R3:	if(regSrRB)		nxtRegGprR3B=regValRo;
-					else			nxtRegGprR3A=regValRo;
-		UREG_R4:	if(regSrRB)		nxtRegGprR4B=regValRo;
-					else			nxtRegGprR4A=regValRo;
-		UREG_R5:	if(regSrRB)		nxtRegGprR5B=regValRo;
-					else			nxtRegGprR5A=regValRo;
-		UREG_R6:	if(regSrRB)		nxtRegGprR6B=regValRo;
-					else			nxtRegGprR6A=regValRo;
-		UREG_R7:	if(regSrRB)		nxtRegGprR7B=regValRo;
-					else			nxtRegGprR7A=regValRo;
+		UREG_R0:	nxtRegGprR0A=regValRo;
+		UREG_R1:	nxtRegGprR1A=regValRo;
+		UREG_R2:	nxtRegGprR2A=regValRo;
+		UREG_R3:	nxtRegGprR3A=regValRo;
+		UREG_R4:	nxtRegGprR4A=regValRo;
+		UREG_R5:	nxtRegGprR5A=regValRo;
+		UREG_R6:	nxtRegGprR6A=regValRo;
+		UREG_R7:	nxtRegGprR7A=regValRo;
 
 		UREG_R8:	nxtRegGprR8 =regValRo;
 		UREG_R9:	nxtRegGprR9 =regValRo;
@@ -380,7 +392,7 @@ begin
 //	regGprR15	<= nxtRegGprR15;
 */
 
-// /*
+/*
 	regGprR0A <= (!regSrRB && (regIdRo==UREG_R0)) ? regValRo : regGprR0A;
 	regGprR1A <= (!regSrRB && (regIdRo==UREG_R1)) ? regValRo : regGprR1A;
 	regGprR2A <= (!regSrRB && (regIdRo==UREG_R2)) ? regValRo : regGprR2A;
@@ -406,7 +418,57 @@ begin
 	regGprR12 <= (regIdRo==UREG_R12) ? regValRo : regGprR12;
 	regGprR13 <= (regIdRo==UREG_R13) ? regValRo : regGprR13;
 	regGprR14 <= (regIdRo==UREG_R14) ? regValRo : regGprR14;
-// */
+*/
+
+	regSrRB		<= nxtRegSrRB;
+	if(regSrRB^nxtRegSrRB)
+	begin
+		regGprR0A	<= regGprR0B;
+		regGprR1A	<= regGprR1B;
+		regGprR2A	<= regGprR2B;
+		regGprR3A	<= regGprR3B;
+		regGprR4A	<= regGprR4B;
+		regGprR5A	<= regGprR5B;
+		regGprR6A	<= regGprR6B;
+		regGprR7A	<= regGprR7B;
+
+		regGprR0B	<= regGprR0A;
+		regGprR1B	<= regGprR1A;
+		regGprR2B	<= regGprR2A;
+		regGprR3B	<= regGprR3A;
+		regGprR4B	<= regGprR4A;
+		regGprR5B	<= regGprR5A;
+		regGprR6B	<= regGprR6A;
+		regGprR7B	<= regGprR7A;
+	end
+	else
+	begin
+		regGprR0A <= (regIdRo==UREG_R0) ? regValRo : regGprR0A;
+		regGprR1A <= (regIdRo==UREG_R1) ? regValRo : regGprR1A;
+		regGprR2A <= (regIdRo==UREG_R2) ? regValRo : regGprR2A;
+		regGprR3A <= (regIdRo==UREG_R3) ? regValRo : regGprR3A;
+		regGprR4A <= (regIdRo==UREG_R4) ? regValRo : regGprR4A;
+		regGprR5A <= (regIdRo==UREG_R5) ? regValRo : regGprR5A;
+		regGprR6A <= (regIdRo==UREG_R6) ? regValRo : regGprR6A;
+		regGprR7A <= (regIdRo==UREG_R7) ? regValRo : regGprR7A;
+
+		regGprR0B <= (regIdRo==UREG_R0B) ? regValRo : regGprR0B;
+		regGprR1B <= (regIdRo==UREG_R1B) ? regValRo : regGprR1B;
+		regGprR2B <= (regIdRo==UREG_R2B) ? regValRo : regGprR2B;
+		regGprR3B <= (regIdRo==UREG_R3B) ? regValRo : regGprR3B;
+		regGprR4B <= (regIdRo==UREG_R4B) ? regValRo : regGprR4B;
+		regGprR5B <= (regIdRo==UREG_R5B) ? regValRo : regGprR5B;
+		regGprR6B <= (regIdRo==UREG_R6B) ? regValRo : regGprR6B;
+		regGprR7B <= (regIdRo==UREG_R7B) ? regValRo : regGprR7B;
+	end
+
+	regGprR8  <= (regIdRo==UREG_R8 ) ? regValRo : regGprR8 ;
+	regGprR9  <= (regIdRo==UREG_R9 ) ? regValRo : regGprR9 ;
+	regGprR10 <= (regIdRo==UREG_R10) ? regValRo : regGprR10;
+	regGprR11 <= (regIdRo==UREG_R11) ? regValRo : regGprR11;
+	regGprR12 <= (regIdRo==UREG_R12) ? regValRo : regGprR12;
+	regGprR13 <= (regIdRo==UREG_R13) ? regValRo : regGprR13;
+	regGprR14 <= (regIdRo==UREG_R14) ? regValRo : regGprR14;
 
 
 	if(reset)

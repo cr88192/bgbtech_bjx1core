@@ -44,7 +44,7 @@ module DcTile3(
 input			clock;
 input			reset;
 
-input[31:0]		regInAddr;		//input PC address
+input[63:0]		regInAddr;		//input PC address
 input[63:0]		regInData;		//input data (store)
 input			regInOE;		//Load
 input			regInWR;		//Store
@@ -55,7 +55,7 @@ output[1:0]		regOutOK;		//set if operation suceeds
 
 input[127:0]	memPcData;		//memory data in
 output[127:0]	memOutData;		//memory data out
-output[31:0]	memPcAddr;		//memory address
+output[63:0]	memPcAddr;		//memory address
 output			memPcOE;		//memory load
 output			memPcWR;		//memory store
 input[1:0]		memPcOK;		//memory OK
@@ -96,7 +96,7 @@ reg			tRdZx;
 
 reg[63:0]	tRegInData;
 
-reg[31:0]	tMemPcAddr;		//memory address
+reg[63:0]	tMemPcAddr;		//memory address
 reg			tMemPcOE;		//memory load
 reg			tMemPcWR;		//memory store
 reg[127:0]	tMemOutData;	//memory data
@@ -142,8 +142,8 @@ reg			nxtAccCommitOK;
 
 always @*
 begin
-	tRegInPc1=regInAddr;
-	tRegInPc2=regInAddr+4;
+	tRegInPc1=regInAddr[31:0];
+	tRegInPc2=regInAddr[31:0]+4;
 	tBlkNeedAd1=tRegInPc1[31:4];
 	tBlkNeedAd2=tRegInPc2[31:4];
 	

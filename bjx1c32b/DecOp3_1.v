@@ -64,9 +64,6 @@ reg[7:0]		opUCmd;
 reg[3:0]		opStepPc;
 reg[3:0]		opStepPc2;
 
-reg[3:0]		opStepPc2A;
-reg[3:0]		opStepPc2B;
-
 assign	idRegN = opRegN;
 assign	idRegS = opRegS;
 assign	idRegT = opRegT;
@@ -83,9 +80,9 @@ assign	idStepPc2 = opStepPc2;
 // reg			tOpDflRnst;
 
 reg[4:0]	tOpDecXfrm;
-reg[2:0]	tOpDecXfrmZx;
+reg[3:0]	tOpDecXfrmZx;
 
-// reg[7:0]	tOpW2;
+reg[7:0]	tOpW2;
 
 
 reg[6:0]	opRegN_Dfl;
@@ -106,7 +103,7 @@ reg[6:0]	opRegM_SR;
 
 reg[6:0]	opRegN_FR;
 reg[6:0]	opRegM_FR;
-// reg[6:0]	opRegO_FR;
+reg[6:0]	opRegO_FR;
 reg[6:0]	opRegS_FR;
 reg[6:0]	opRegT_FR;
 
@@ -130,15 +127,29 @@ reg[31:0]	opImm6_SxCE;
 reg[31:0]	opImm6_ZxCE;
 reg[31:0]	opImm6_NxCE;
 
+reg			opIsRegN_FR;
+reg			opIsRegM_FR;
+reg			opIsRegS_FR;
+reg			opIsRegT_FR;
+
+reg			opIsRegM_CR;
+reg			opIsRegM_SR;
+
 
 always @*
 begin
 
 	opStepPc = 2;
 	
+//	opPfxImm=0;
+//	opCmdWord=0;
+
 	opPfxImm=8'hXX;
 	opCmdWord=0;
 
+//	opRegN=0;
+//	opRegS=0;
+//	opRegT=0;
 	opUCmd=UCMD_UDBRK;
 	opImm=0;
 
@@ -146,12 +157,17 @@ begin
 	isOp32=0;
 	isOp8E=0;	isOpCE=0;	isOpXE=0;
 	isOpCC0=0;	isOpCC3=0;	opCCe=0;
+//	opMovFpr=0;
 	opUseBase16=1;
 
 
 	opRegN=UREG_ZZR;
 	opRegS=UREG_ZZR;
 	opRegT=UREG_ZZR;
+
+	opIsRegN_FR=0;	opIsRegM_FR=0;
+	opIsRegS_FR=0;	opIsRegT_FR=0;
+	opIsRegM_CR=0;	opIsRegM_SR=0;
 
 	tOpDecXfrm=UXFORM_CST;
 	tOpDecXfrmZx=UXFORMZX_SX;
@@ -166,17 +182,15 @@ begin
 	end
 
 	opCmdWord=istrWord[15:0];
-//	tOpW2=istrWord[31:24];
-
-	opPfxImm=istrWord[7:0];
+	tOpW2=istrWord[31:24];
 
 	if(decEnableBJX1)
 	begin
 		case(istrWord[15:8])
-/*
 			8'h8A: begin
 				isOp32=1;
 				opCmdWord=istrWord[15:0];
+				tOpW2=istrWord[47:40];
 				
 				opImm[31:24]=istrWord[7]?8'hFF:8'h00;
 				opImm[23:16]=istrWord[7:0];
@@ -187,13 +201,14 @@ begin
 				tOpDecXfrm=UXFORM_CST;
 				opUseBase16=0;
 			end
-*/
 
 			8'h8E: begin
 				isOp32=1;
 				isOp8E=1;
 				isOpXE=1;
+				opPfxImm=istrWord[7:0];
 				opCmdWord=istrWord[31:16];
+				tOpW2=istrWord[47:40];
 			end
 
 			8'hCC: begin
@@ -208,8 +223,9 @@ begin
 					opPsDQ=istrWord[3];
 					opPwDQ=0;
 					opPlDQ=opPsDQ;
+					opPfxImm=0;
 					opCmdWord=istrWord[31:16];
-					opUseBase16=0;
+					tOpW2=istrWord[47:40];
 				end
 			end
 
@@ -219,7 +235,9 @@ begin
 					isOp32=1;
 					isOpCE=1;
 					isOpXE=1;
+					opPfxImm=istrWord[7:0];
 					opCmdWord=istrWord[31:16];
+					tOpW2=istrWord[47:40];
 					opPsDQ=istrWord[7];
 					opPwDQ=0;
 					opPlDQ=0;
@@ -230,129 +248,31 @@ begin
 			end
 		endcase
 
+		if(isOp32)
+			opStepPc = 4;
 	end
-
-
-	if(decEnable64A)
-	begin
-		opRegN_Dfl	= {2'b00, opCCe[2],    opCmdWord[11:8]};
-		opRegN_CEf	= {2'b00, opPfxImm[7], opCmdWord[11:8]};
-		opRegN_CEe	= {2'b00, opPfxImm[6], opCmdWord[11:8]};
-
-		opRegM_Dfl	= {2'b00, opCCe[1],    opCmdWord[ 7:4]};
-		opRegM_CEf	= {2'b00, opPfxImm[6], opCmdWord[ 7:4]};
-		opRegM_CEe	= {2'b00, opPfxImm[5], opCmdWord[ 7:4]};
-
-		opRegO_CEe	= {2'b00, opPfxImm[4], opCmdWord[ 3:0]};
-
-		opRegT_CEe	= {2'b00, opPfxImm[4], opPfxImm [ 3:0]};
-
-		opRegO_Dfl	= {2'b00, opCCe[0],    opCmdWord[ 3:0]};
-
-		opImm6_SxCE	= {opPfxImm[5] ? 26'h3FFFFFF : 26'h0, opPfxImm [ 5:0]};
-		opImm6_ZxCE	= {26'h000000, opPfxImm [ 5:0]};
-		opImm6_NxCE	= {26'hFFFFFF, opPfxImm [ 5:0]};
-
-	end
-	else
-	begin
-		opRegN_Dfl	= {3'b000, opCmdWord[11:8]};
-		opRegM_Dfl	= {3'b000, opCmdWord[ 7:4]};
-		opRegO_Dfl	= {3'b000, opCmdWord[ 3:0]};
-
-		opRegN_CEf	= opRegN_Dfl;
-		opRegM_CEf	= opRegM_Dfl;
-
-		opRegN_CEe	= 7'hXX;
-		opRegM_CEe	= 7'hXX;
-		opRegO_CEe	= 7'hXX;
-		opRegT_CEe	= 7'hXX;
-	end
-
-	opRegM_CR	= {3'h2, opCmdWord[ 7:4]};
-	opRegM_SR	= {3'h6, opCmdWord[ 7:4]};
-	opRegN_FR	= {3'h4, opCmdWord[11:8]};
-	opRegM_FR	= {3'h4, opCmdWord[ 7:4]};
-
-
-	if(decEnableBJX1)
-	begin
-		opRegS_8E	= {3'b000, opPfxImm [ 7:4]};
-		opRegT_8E	= {3'b000, opPfxImm [ 3:0]};
-		opRegS_FR	= {3'h4, opPfxImm [ 7:4]};
-		opRegT_FR	= {3'h4, opPfxImm [ 3:0]};
-
-		opImm_Zx4_8E	= {28'h0, opPfxImm [ 3:0]};
-
-		opImm_Sx8E	= {opPfxImm[7] ? 24'hFFFFFF : 24'h0, opPfxImm [ 7:0]};
-		opImm_Zx8E	= {24'h000000, opPfxImm [ 7:0]};
-		opImm_Nx8E	= {24'hFFFFFF, opPfxImm [ 7:0]};
-
-		opImmM_Sx12_8E	= {opPfxImm[7] ? 20'hFFFFF : 20'h0,
-			opPfxImm [ 7:0], opCmdWord [ 7:4]};
-		opImmO_Sx12_8E	= {opPfxImm[7] ? 20'hFFFFF : 20'h0,
-			opPfxImm [ 7:0], opCmdWord [ 3:0]};
-
-		opImm_Sx16_8E	= {opPfxImm[7] ? 16'hFFFF : 16'h0000,
-			opPfxImm [ 7:0], opCmdWord [ 7:0]};
-		opImm_Sx20_8E	= {opPfxImm[7] ? 12'hFFF : 12'h000,
-			opPfxImm [ 7:0], opCmdWord [11:0]};
-
-		opRegN_N3 = {3'h0, 1'b1, opCmdWord[6:4]};
-		opRegM_N3 = {3'h0, 1'b1, opCmdWord[2:0]};
-	end
-	else
-	begin
-		opRegS_8E		= 7'hXX;			opRegT_8E		= 7'hXX;
-		opRegS_FR		= 7'hXX;			opRegT_FR		= 7'hXX;
-		opImm_Zx4_8E	= 32'hXXXXXXXX;		opImm_Sx8E		= 32'hXXXXXXXX;
-		opImm_Zx8E		= 32'hXXXXXXXX;		opImm_Nx8E		= 32'hXXXXXXXX;
-		opImm_Sx16_8E	= 32'hXXXXXXXX;		opImm_Sx20_8E	= 32'hXXXXXXXX;
-		opImmM_Sx12_8E	= 32'hXXXXXXXX;		opImmO_Sx12_8E	= 32'hXXXXXXXX;
-
-		opRegN_N3=UREG_XX;		opRegM_N3=UREG_XX;
-	end
-
-	opImm_Zx4	= {28'h0, opCmdWord[ 3:0]};
-	opImm_Zx8	= {24'h0, opCmdWord[ 7:0]};
-	opImm_Sx8	= {opCmdWord[ 7] ? 24'hFFFFFF : 24'h000000, opCmdWord [ 7:0]};
-	opImm_Sx12	= {opCmdWord[11] ? 20'hFFFFF  : 20'h00000 , opCmdWord [11:0]};
-
 
 	opStepPc2 = 2;
-
-	opStepPc2A=2;
-	opStepPc2B=2;
-
 	if(decEnableBJX1)
 	begin
+		case(tOpW2)
+			8'h8A:		opStepPc2 = 4;
+			8'h8C:		opStepPc2 = 4;
+			8'h8E:		opStepPc2 = 4;
 
-		if(istrWord[47:43]==5'h10001)
-		begin
-			if(	(istrWord[42:40]==3'b010) ||
-				(istrWord[42:40]==3'b100) ||
-				(istrWord[42:40]==3'b110))
-					opStepPc2A=4;
-		end
+			8'hCC:		opStepPc2 = (opJQ && decEnable64A) ? 4 : 2;
+			8'hCE:		opStepPc2 = (opJQ && decEnable64A) ? 4 : 2;
 
-		if(istrWord[31:27]==5'b10001)
-		begin
-			if(	(istrWord[26:24]==3'b010) ||
-				(istrWord[26:24]==3'b100) ||
-				(istrWord[26:24]==3'b110))
-					opStepPc2B=4;
-		end
-
+			default:	opStepPc2 = 2;
+		endcase
 	end
-
 
 	if(decEnable64A)
 	begin
 		if(isOpCC3)		/* BJX1-64A */
 		begin
 			opUseBase16=0;
-//			casez(opCmdWord[15:12])
-			casez(istrWord[31:28])
+			casez(opCmdWord[15:12])
 				4'h0: opUCmd=UCMD_ALU_ADD;
 				4'h1: opUCmd=UCMD_ALU_SUB;
 				4'h2: opUCmd=UCMD_ALU_MUL;
@@ -1044,11 +964,6 @@ begin
 			if(isOpXE)	begin
 	//			opUCmd=UCMD_BSRN;	tOpDecXfrm=UXFORM_BR_D8;
 			end else begin
-				isOp32=1;
-				
-				opImm = { istrWord[7] ? 8'hFF : 8'h00,
-					istrWord[7:0], istrWord[31:16]} ;
-
 				opRegN=UREG_R0;
 				opUCmd=UCMD_MOV_RI;
 				tOpDecXfrm=UXFORM_CST;
@@ -1190,7 +1105,7 @@ begin
 		16'hFzz0: begin
 			opUCmd=UCMD_FPU_ADD;
 			tOpDecXfrm=UXFORM_FPARI_NS;
-			tOpDecXfrmZx=UXFORMZX_FF;
+//			tOpDecXfrmZx=UXFORMZX_FF;
 		end
 		16'hFzz1: begin
 			opUCmd=UCMD_FPU_SUB;
@@ -1241,7 +1156,7 @@ begin
 		end
 		16'hFzzB: begin
 //			opUCmd=UCMD_MOVL_RM;	tOpDecXfrm=UXFORM_MOV_NSDEC;
-//			opIsRegM_FR=1;
+			opIsRegM_FR=1;
 			tOpDecXfrmZx=UXFORMZX_FRD;
 		end
 
@@ -1249,6 +1164,140 @@ begin
 
 	endcase
 
+//	opIsRegN_FR=0;
+//	opIsRegM_FR=0;
+//	opIsRegS_FR=0;
+//	opIsRegT_FR=0;
+//	opIsRegM_CR=0;
+//	opIsRegM_SR=0;
+
+
+	if(decEnable64A)
+	begin
+/*
+		opRegN_Dfl	= {opIsRegN_FR?2'b10:2'b00, opCCe[2],    opCmdWord[11:8]};
+		opRegN_CEf	= {opIsRegN_FR?2'b10:2'b00, opPfxImm[7], opCmdWord[11:8]};
+		opRegN_CEe	= {opIsRegN_FR?2'b10:2'b00, opPfxImm[6], opCmdWord[11:8]};
+
+		opRegM_Dfl	= {opIsRegM_FR?2'b10:2'b00, opCCe[1],    opCmdWord[ 7:4]};
+		opRegM_CEf	= {opIsRegM_FR?2'b10:2'b00, opPfxImm[6], opCmdWord[ 7:4]};
+		opRegS_CEe	= {opIsRegM_FR?2'b10:2'b00, opPfxImm[5], opCmdWord[ 7:4]};
+
+		opRegT_CEe	= {opIsRegT_FR?2'b10:2'b00, opPfxImm[4], opPfxImm [ 3:0]};
+*/
+
+		opRegN_Dfl	= {2'b00, opCCe[2],    opCmdWord[11:8]};
+		opRegN_CEf	= {2'b00, opPfxImm[7], opCmdWord[11:8]};
+		opRegN_CEe	= {2'b00, opPfxImm[6], opCmdWord[11:8]};
+
+		opRegM_Dfl	= {2'b00, opCCe[1],    opCmdWord[ 7:4]};
+		opRegM_CEf	= {2'b00, opPfxImm[6], opCmdWord[ 7:4]};
+		opRegM_CEe	= {2'b00, opPfxImm[5], opCmdWord[ 7:4]};
+
+		opRegO_CEe	= {2'b00, opPfxImm[4], opCmdWord[ 3:0]};
+
+		opRegT_CEe	= {2'b00, opPfxImm[4], opPfxImm [ 3:0]};
+
+		opRegO_Dfl	= {2'b00, opCCe[0],    opCmdWord[ 3:0]};
+
+		opImm6_SxCE	= {opPfxImm[5] ? 26'h3FFFFFF : 26'h0, opPfxImm [ 5:0]};
+		opImm6_ZxCE	= {26'h000000, opPfxImm [ 5:0]};
+		opImm6_NxCE	= {26'hFFFFFF, opPfxImm [ 5:0]};
+
+	end
+	else
+	begin
+//		opRegN_Dfl	= {opIsRegN_FR?3'b100:3'b000, opCmdWord[11:8]};
+//		opRegM_Dfl	= {opIsRegM_FR?3'b100:3'b000, opCmdWord[ 7:4]};
+
+		opRegN_Dfl	= {3'b000, opCmdWord[11:8]};
+		opRegM_Dfl	= {3'b000, opCmdWord[ 7:4]};
+		opRegO_Dfl	= {3'b000, opCmdWord[ 3:0]};
+
+//		opRegN_CEf	= 7'hXX;
+//		opRegM_CEf	= 7'hXX;
+		opRegN_CEf	= opRegN_Dfl;
+		opRegM_CEf	= opRegM_Dfl;
+
+		opRegN_CEe	= 7'hXX;
+		opRegM_CEe	= 7'hXX;
+		opRegO_CEe	= 7'hXX;
+		opRegT_CEe	= 7'hXX;
+	end
+
+/*
+	if(opIsRegM_CR)
+	begin
+		if(opCmdWord[11])	//RmB
+			opRegM_Dfl={3'h2, 1'b0, opCmdWord[6:4]};
+		else
+			opRegM_Dfl={3'h7, opCmdWord[7:4]};
+	end else if(opIsRegM_SR)
+	begin
+		opRegM_Dfl={3'h6, opCmdWord[7:4]};
+	end
+*/
+
+// /*
+	if(opCmdWord[11])	//RmB
+		opRegM_CR={3'h2, 1'b0, opCmdWord[6:4]};
+	else
+		opRegM_CR={3'h7, opCmdWord[7:4]};
+
+	opRegM_SR={3'h6, opCmdWord[7:4]};
+// */
+
+	opRegN_FR	= {3'h4, opCmdWord[11:8]};
+	opRegM_FR	= {3'h4, opCmdWord[ 7:4]};
+	opRegO_FR	= {3'h4, opCmdWord[ 3:0]};
+
+	if(decEnableBJX1)
+	begin
+//		opRegS_8E		= {opIsRegS_FR?3'b100:3'b000, opPfxImm [ 7:4]};
+//		opRegT_8E		= {opIsRegT_FR?3'b100:3'b000, opPfxImm [ 3:0]};
+		opRegS_8E		= {3'b000, opPfxImm [ 7:4]};
+		opRegT_8E		= {3'b000, opPfxImm [ 3:0]};
+
+		opRegS_FR	= {3'h4, opPfxImm [ 7:4]};
+		opRegT_FR	= {3'h4, opPfxImm [ 3:0]};
+
+		opImm_Zx4_8E	= {28'h0, opPfxImm [ 3:0]};
+
+		opImm_Sx8E	= {opPfxImm[7] ? 24'hFFFFFF : 24'h0, opPfxImm [ 7:0]};
+		opImm_Zx8E	= {24'h000000, opPfxImm [ 7:0]};
+		opImm_Nx8E	= {24'hFFFFFF, opPfxImm [ 7:0]};
+
+		opImmM_Sx12_8E	= {opPfxImm[7] ? 20'hFFFFF : 20'h0,
+			opPfxImm [ 7:0], opCmdWord [ 7:4]};
+		opImmO_Sx12_8E	= {opPfxImm[7] ? 20'hFFFFF : 20'h0,
+			opPfxImm [ 7:0], opCmdWord [ 3:0]};
+
+		opImm_Sx16_8E	= {opPfxImm[7] ? 16'hFFFF : 16'h0000,
+			opPfxImm [ 7:0], opCmdWord [ 7:0]};
+		opImm_Sx20_8E	= {opPfxImm[7] ? 12'hFFF : 12'h000,
+			opPfxImm [ 7:0], opCmdWord [11:0]};
+
+		opRegN_N3 = (opCmdWord[6:4]==3'b111) ? UREG_R0 :
+			{3'h0, 1'b1, opCmdWord[6:4]};
+		opRegM_N3 = (opCmdWord[2:0]==3'b111) ? UREG_R0 :
+			{3'h0, 1'b1, opCmdWord[2:0]};
+	end
+	else
+	begin
+		opRegS_8E		= 7'hXX;			opRegT_8E		= 7'hXX;
+		opRegS_FR		= 7'hXX;			opRegT_FR		= 7'hXX;
+		opImm_Zx4_8E	= 32'hXXXXXXXX;		opImm_Sx8E		= 32'hXXXXXXXX;
+		opImm_Zx8E		= 32'hXXXXXXXX;		opImm_Nx8E		= 32'hXXXXXXXX;
+		opImm_Sx16_8E	= 32'hXXXXXXXX;		opImm_Sx20_8E	= 32'hXXXXXXXX;
+		opImmM_Sx12_8E	= 32'hXXXXXXXX;		opImmO_Sx12_8E	= 32'hXXXXXXXX;
+
+		opRegN_N3=UREG_XX;		opRegM_N3=UREG_XX;
+	end
+
+	opImm_Zx4	= {28'h0, opCmdWord[ 3:0]};
+	opImm_Zx8	= {24'h0, opCmdWord[ 7:0]};
+	opImm_Sx8	= {opCmdWord[ 7] ? 24'hFFFFFF : 24'h000000, opCmdWord [ 7:0]};
+	opImm_Sx12	= {opCmdWord[11] ? 20'hFFFFF  : 20'h00000 , opCmdWord [11:0]};
 
 	case(tOpDecXfrm)
 
@@ -1333,17 +1382,7 @@ begin
 					opRegN=opRegN_FR;	opRegS=opRegM_Dfl;
 					opRegT=UREG_MR_MEMINC;
 				end
-				default: begin
-					opRegN=UREG_XX;		opRegS=UREG_XX;
-					opRegT=UREG_XX;		opImm=32'hXXXXXXXX;
-				end
 
-			endcase
-
-		end
-
-		UXFORM_MOVC_NSDEC: begin
-			case(tOpDecXfrmZx)
 				UXFORMZX_RS: begin
 					opRegN=opRegM_SR;	opRegS=opRegN_Dfl;
 					opRegT=UREG_MR_MEMINC;
@@ -1373,23 +1412,14 @@ begin
 		end
 
 		UXFORM_FPARI_NS: begin
-			if(isOp8E)
-			begin
-				opRegN=opRegN_FR;
-				opRegS=opRegS_FR;
-				opRegT=opRegT_FR;
-			end
-			else
-			begin
-				opRegN=opRegN_FR;
-				opRegS=opRegM_FR;
-			end
+			opRegN=opRegN_FR;
+			opRegS=opRegM_FR;
 		end
 
 		UXFORM_ARI_NS: begin
-			opRegN=opRegN_Dfl;	opRegS=opRegM_Dfl;
+//			opRegN=opRegN_Dfl;	opRegS=opRegM_Dfl;
 
-/*
+//			/*
 			case(tOpDecXfrmZx)
 				UXFORMZX_RR: begin
 					opRegN=opRegN_Dfl;	opRegS=opRegM_Dfl;
@@ -1399,16 +1429,6 @@ begin
 					opRegN=opRegN_FR;	opRegS=opRegM_FR;
 				end
 
-				default: begin
-					opRegN=UREG_XX;		opRegS=UREG_XX;
-					opRegT=UREG_XX;		opImm=32'hXXXXXXXX;
-				end
-			endcase
-*/
-		end
-
-		UXFORM_ARIC_NS: begin
-			case(tOpDecXfrmZx)
 				UXFORMZX_RS: begin
 					opRegN=opRegM_SR;	opRegS=opRegN_Dfl;
 				end
@@ -1425,10 +1445,11 @@ begin
 
 				default: begin
 					opRegN=UREG_XX;		opRegS=UREG_XX;
-//					opRegT=UREG_XX;		opImm=32'hXXXXXXXX;
+					opRegT=UREG_XX;		opImm=32'hXXXXXXXX;
 				end
 
 			endcase
+//			*/
 		end
 
 		UXFORM_ARI_NST: begin
@@ -1579,11 +1600,11 @@ begin
 		end
 		
 		UXFORM_NST_8E: begin
-			opRegN=opRegN_Dfl;
-			opRegS=opRegS_8E;
-			opRegT=opRegT_8E;
+//			opRegN=opRegN_Dfl;
+//			opRegS=opRegS_8E;
+//			opRegT=opRegT_8E;
 
-/*
+// /*
 			case(tOpDecXfrmZx)
 				UXFORMZX_RR: begin
 					opRegN=opRegN_Dfl;
@@ -1602,7 +1623,7 @@ begin
 					opRegT=UREG_XX;		opImm=32'hXXXXXXXX;
 				end
 			endcase
-*/
+// */
 		end
 
 		default: begin
@@ -1611,18 +1632,12 @@ begin
 		end
 	endcase
 
-
-	if(isOp32)
-	begin
-		opStepPc2 = opStepPc2A;
-		opStepPc = 4;
-	end
-	else
-	begin
-		opStepPc2 = opStepPc2B;
-		opStepPc = 2;
-	end
-
+//	if(opIsRegN_FR)
+//		opRegN[6:5]=2'b10;
+//	if(opIsRegM_FR || opIsRegS_FR)
+//		opRegS[6:5]=2'b10;
+//	if(opIsRegT_FR)
+//		opRegT[6:5]=2'b10;
 
 end
 

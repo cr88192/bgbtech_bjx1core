@@ -28,7 +28,7 @@ states:
 
 `include "CoreDefs.v"
 
-module DcTile3(
+module DcTile2(
 	/* verilator lint_off UNUSED */
 	clock, reset,
 	regInData,		regOutData,
@@ -85,7 +85,6 @@ reg[31:0]	tRegInPc4;
 
 reg[63:0]	tBlkData1;
 reg[63:0]	tBlkData2;
-reg[63:0]	tBlkData2B;
 reg[63:0]	tBlkData3;
 reg[63:0]	tBlkData4;
 
@@ -118,8 +117,6 @@ assign		regOutOK = tRegOutOK;
 assign		memPcAddr = tMemPcAddr;
 assign		memPcOE = tMemPcOE;
 
-reg[63:0]	tRegOutDataB;
-
 reg[3:0]	isReqTileSt;
 reg[27:0]	isReqNeedAd;
 reg[3:0]	nxtReqTileSt;
@@ -135,10 +132,6 @@ reg[159:0]	nxtReqTempBlk;
 reg[159:0]	accTempBlk;
 reg			accHit;
 reg			accNoCache;
-reg			nxtAccHit;
-
-reg			accCommitOK;
-reg			nxtAccCommitOK;
 
 always @*
 begin
@@ -156,13 +149,6 @@ begin
 	tBlkNeedAd4=tBlkNeedAd2;
 
 	nxtReqTempBlk=reqTempBlk;
-	
-	nxtReqCommitFl=0;
-	tBlkData2=UV64_XX;
-	nxtReqCommitAd1=28'hXXXXXXX;
-	nxtReqCommitAd2=28'hXXXXXXX;
-	nxtAccCommitOK=0;
-	nxtReqNeedAd=0;
 
 //	tMemPcAddr=32'hX;
 	tMemPcAddr=0;
@@ -171,8 +157,7 @@ begin
 	tMemPcWR=0;
 	tMemPcOp=0;
 
-	nxtAccHit=0;
-//	accHit=0;
+	accHit=0;
 	accNoCache=0;
 
 	if(regInAddr[31:29]==3'b101)
@@ -187,8 +172,8 @@ begin
 	begin
 		if(accNoCache)
 		begin
-			nxtAccHit=0;
-//			accTempBlk=160'hX;
+			accHit=0;
+			accTempBlk=160'hX;
 
 			tMemPcAddr[29:2]=regInAddr[29:2];
 			tMemOutData={96'h0, regInData[31:0]};
@@ -202,7 +187,7 @@ begin
 			if((tBlkNeedAd1==icBlkAd[tBlkNeedAd1[7:0]]) &&
 				(tBlkNeedAd2==icBlkAd[tBlkNeedAd2[7:0]]))
 			begin
-				nxtAccHit=1;
+				accHit=1;
 			end
 			else if(tBlkNeedAd1==icBlkAd[tBlkNeedAd1[7:0]])
 			begin
@@ -214,11 +199,16 @@ begin
 				nReqNeedAd=tBlkNeedAd1;
 				tBlkNeedAd3=tBlkNeedAd1;
 			end
+
+			accTempBlk[ 31:  0]=icBlkA[tBlkNeedAd3[7:0]];
+			accTempBlk[ 63: 32]=icBlkB[tBlkNeedAd3[7:0]];
+			accTempBlk[ 95: 64]=icBlkC[tBlkNeedAd3[7:0]];
+			accTempBlk[127: 96]=icBlkD[tBlkNeedAd3[7:0]];
+			accTempBlk[159:128]=icBlkE[tBlkNeedAd4[7:0]];
 		end
 
-		if(nxtAccHit)
+		if(accHit)
 		begin
-			/* Read Stage */
 			case(regInAddr[3:2])
 			2'b00: tBlkData2=accTempBlk[ 63:  0];
 			2'b01: tBlkData2=accTempBlk[ 95: 32];
@@ -282,18 +272,17 @@ begin
 				2'b11: tRegOutData=        tBlkData2[63: 0] ;
 			endcase
 
-
-			/* Write Stage */
+			tRegOutOK=1;
 
 			tRegInData = regInData;
 			case(regInOp[4:2])
 				3'b000:	tRegInData = regInData;
-				3'b001:	tRegInData = tRegOutDataB + regInData;
-				3'b010:	tRegInData = tRegOutDataB - regInData;
+				3'b001:	tRegInData = tRegOutData + regInData;
+				3'b010:	tRegInData = tRegOutData - regInData;
 				3'b011:	tRegInData = regInData;
-				3'b100:	tRegInData = tRegOutDataB & regInData;
-				3'b101:	tRegInData = tRegOutDataB | regInData;
-				3'b110:	tRegInData = tRegOutDataB ^ regInData;
+				3'b100:	tRegInData = tRegOutData & regInData;
+				3'b101:	tRegInData = tRegOutData | regInData;
+				3'b110:	tRegInData = tRegOutData ^ regInData;
 				3'b111:	tRegInData = regInData;
 			endcase
 
@@ -302,22 +291,22 @@ begin
 					case(regInAddr[1:0])
 						2'b00: begin
 							tBlkData3[ 7:0]=tRegInData[ 7:0];
-							tBlkData3[63:8]=tBlkData2B[63:8];
+							tBlkData3[63:8]=tBlkData2[63:8];
 						end
 						2'b01: begin
-							tBlkData3[ 7: 0]=tBlkData2B[ 7: 0];
+							tBlkData3[ 7: 0]=tBlkData2[ 7: 0];
 							tBlkData3[15: 8]=tRegInData[ 7: 0];
-							tBlkData3[63:16]=tBlkData2B[63:16];
+							tBlkData3[63:16]=tBlkData2[63:16];
 						end 
 						2'b10: begin
-							tBlkData3[15: 0]=tBlkData2B[15: 0];
+							tBlkData3[15: 0]=tBlkData2[15: 0];
 							tBlkData3[23:16]=tRegInData[ 7: 0];
-							tBlkData3[63:24]=tBlkData2B[63:24];
+							tBlkData3[63:24]=tBlkData2[63:24];
 						end 
 						2'b11: begin
-							tBlkData3[23: 0]=tBlkData2B[23: 0];
+							tBlkData3[23: 0]=tBlkData2[23: 0];
 							tBlkData3[31:24]=tRegInData[ 7: 0];
-							tBlkData3[63:32]=tBlkData2B[63:32];
+							tBlkData3[63:32]=tBlkData2[63:32];
 						end
 					endcase
 				end
@@ -326,22 +315,22 @@ begin
 					case(regInAddr[1:0])
 						2'b00: begin
 							tBlkData3[15: 0]=tRegInData[15: 0];
-							tBlkData3[63:16]=tBlkData2B[63:16];
+							tBlkData3[63:16]=tBlkData2[63:16];
 						end
 						2'b01: begin
-							tBlkData3[ 7: 0]=tBlkData2B[ 7: 0];
+							tBlkData3[ 7: 0]=tBlkData2[ 7: 0];
 							tBlkData3[23: 8]=tRegInData[15: 0];
-							tBlkData3[63:24]=tBlkData2B[63:24];
+							tBlkData3[63:24]=tBlkData2[63:24];
 						end 
 						2'b10: begin
-							tBlkData3[15: 0]=tBlkData2B[15: 0];
+							tBlkData3[15: 0]=tBlkData2[15: 0];
 							tBlkData3[31:16]=tRegInData[15: 0];
-							tBlkData3[63:32]=tBlkData2B[63:32];
+							tBlkData3[63:32]=tBlkData2[63:32];
 						end 
 						2'b11: begin
-							tBlkData3[23: 0]=tBlkData2B[23: 0];
+							tBlkData3[23: 0]=tBlkData2[23: 0];
 							tBlkData3[39:24]=tRegInData[15: 0];
-							tBlkData3[63:40]=tBlkData2B[63:40];
+							tBlkData3[63:40]=tBlkData2[63:40];
 						end
 					endcase
 				end
@@ -350,22 +339,22 @@ begin
 					case(regInAddr[1:0])
 						2'b00: begin
 							tBlkData3[31: 0]=tRegInData[31: 0];
-							tBlkData3[63:32]=tBlkData2B[63:32];
+							tBlkData3[63:32]=tBlkData2[63:32];
 						end
 						2'b01: begin
-							tBlkData3[ 7: 0]=tBlkData2B[ 7: 0];
+							tBlkData3[ 7: 0]=tBlkData2[ 7: 0];
 							tBlkData3[39: 8]=tRegInData[31: 0];
-							tBlkData3[63:40]=tBlkData2B[63:40];
+							tBlkData3[63:40]=tBlkData2[63:40];
 						end 
 						2'b10: begin
-							tBlkData3[15: 0]=tBlkData2B[15: 0];
+							tBlkData3[15: 0]=tBlkData2[15: 0];
 							tBlkData3[47:16]=tRegInData[31: 0];
-							tBlkData3[63:48]=tBlkData2B[63:48];
+							tBlkData3[63:48]=tBlkData2[63:48];
 						end 
 						2'b11: begin
-							tBlkData3[23: 0]=tBlkData2B[23: 0];
+							tBlkData3[23: 0]=tBlkData2[23: 0];
 							tBlkData3[55:24]=tRegInData[31: 0];
-							tBlkData3[63:56]=tBlkData2B[63:56];
+							tBlkData3[63:56]=tBlkData2[63:56];
 						end
 					endcase
 				end
@@ -387,15 +376,10 @@ begin
 				2'b11: nxtReqTempBlk[159: 96]=tBlkData3;
 			endcase
 
-			nxtReqCommit=regInWR && accHit;
+			nxtReqCommit=regInWR;
 			nxtReqCommitAd1=tBlkNeedAd3;
 			nxtReqCommitAd2=tBlkNeedAd4;
 			nxtReqCommitFl=1;
-			nxtAccCommitOK = regInWR && accHit;
-
-			/* Output */
-			tRegOutOK=((accHit && !regInWR) || accCommitOK) ?
-				UMEM_OK_OK : UMEM_OK_HOLD;
 
 		end
 	end
@@ -529,19 +513,9 @@ end
 
 always @ (posedge clock)
 begin
-	reqNeedAd			<= nReqNeedAd;
-	isReqNeedAd			<= nxtReqNeedAd;
-	reqTempBlk			<= nxtReqTempBlk;
-
-	accTempBlk[ 31:  0]	<= icBlkA[tBlkNeedAd3[7:0]];
-	accTempBlk[ 63: 32]	<= icBlkB[tBlkNeedAd3[7:0]];
-	accTempBlk[ 95: 64]	<= icBlkC[tBlkNeedAd3[7:0]];
-	accTempBlk[127: 96]	<= icBlkD[tBlkNeedAd3[7:0]];
-	accTempBlk[159:128]	<= icBlkE[tBlkNeedAd4[7:0]];
-	accHit				<= nxtAccHit;
-	accCommitOK			<= nxtAccCommitOK;
-	tBlkData2B			<= tBlkData2;
-	tRegOutDataB		<= tRegOutData;
+	reqNeedAd <= nReqNeedAd;
+	isReqNeedAd <= nxtReqNeedAd;
+	reqTempBlk	<= nxtReqTempBlk;
 
 	if(nxtReqCommit)
 	begin

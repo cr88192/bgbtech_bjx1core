@@ -1,0 +1,266 @@
+BGBTech WideJex 1
+* Another Random ISA idea.
+* VLIW Based.
+* Instruction blocks are 128 bits.
+** Organized as 6 instruction words, each 20 bits wide.
+** Either interpreted as 2 blocks of 3 instructions, or 1 block of 6 instructions.
+
+Registers:
+* Uses 16 registers each of which is 64 bits.
+** R15 will be a Stack Pointer.
+*** For many operations, will be Read Only.
+
+* Layout:
+** Bits   3:  0: Tag0
+** Bits  23:  4: Op1
+** Bits  43: 24: Op2
+** Bits  63: 44: Op3
+** Bits  67: 64: Tag1
+** Bits  87: 68: Op4
+** Bits 107: 88: Op5
+** Bits 127:108: Op6
+* Tag: wabc: Wide, A/B/C
+** W: Indicates whether the following block may run in parallel.
+*** Tag0.W: Whether to treat block as 2x3 or 1x6 ops.
+*** Tag1.W: Whether the following block may be chained (if Tag0.W=1)
+** A/B/C will be a context dependent bit local to each Slot.
+
+* If Tag0.W is Clear:
+** First cycle, Op1/2/3 are executed in Slots 1/2/3.
+** Next cycle, Op4/5/6 are executed in Slots 1/2/3.
+* If Tag0.W is Set:
+** First cycle, Op1/2/3/4/5/6 are executed in Slots 1/2/3/4/5/6.
+** Next cycle, the next word is executed.
+
+Some instructions will be specific to specific slots.
+* Compare and Branch instructions may only appear in Slot1.
+* Normal branches will have two Delay slots.
+** If Tag.A is set, interpret it as a non-delay branch.
+* Compare Ops: Tag.A, 0=QWord, 1=DWord
+
+0_0000_0000_0000_0000_0000 NOP
+0_0000_0000_0001_0000_0000 RTS
+0_0000_0000_0010_0000_0000 RTE
+
+0_0000_0001_00dd_ddds_ssss  MOV		Rs, Rd
+q_0000_0001_01tt_ttts_ssss  CMPEQ	Rs, Rt
+q_0000_0001_10tt_ttts_ssss  CMPGT	Rs, Rt
+q_0000_0001_11tt_ttts_ssss  CMPHI	Rs, Rt
+q_0000_0010_00tt_ttts_ssss  TST		Rs, Rt
+q_0000_0010_01tt_ttts_ssss  AND		Rs, Rt
+q_0000_0010_10tt_ttts_ssss  OR		Rs, Rt
+q_0000_0010_11tt_ttts_ssss  XOR		Rs, Rt
+0_0000_0011_00dd_ddds_ssss  ADD		Rs, Rd
+0_0000_0011_01dd_ddds_ssss  SUB		Rs, Rd
+q_0000_0011_10ss_sssi_iiii  MOV		Rs, @(SP, disp5)
+q_0000_0011_11dd_dddi_iiii  MOV		@(SP, disp5), Rd
+n_0000_0100_00dd_dddd_dddd  BRA		disp10
+n_0000_0100_01dd_dddd_dddd  BSR		disp10
+n_0000_0100_10dd_dddd_dddd  BT		disp10
+n_0000_0100_11dd_dddd_dddd  BF		disp10
+b_0000_0101_dddd_iiii_iiii  ADD		#imm8s, Rd
+b_0000_0110_dddd_iiii_iiii  MOV		#imm8s, Rd
+b_0000_0111_dddd_ssss_tttt  SELT	Rs, Rt, Rd
+b_0000_1000_dddd_ssss_tttt  ADD		Rs, Rt, Rd
+b_0000_1001_dddd_ssss_tttt  SUB		Rs, Rt, Rd
+b_0000_1010_dddd_ssss_tttt  MUL     Rs, Rt, Rd		//Narrow Multiply
+b_0000_1011_dddd_ssss_tttt  AND		Rs, Rt, Rd
+b_0000_1100_dddd_ssss_tttt  OR		Rs, Rt, Rd
+b_0000_1101_dddd_ssss_tttt  XOR		Rs, Rt, Rd
+b_0000_1110_dddd_ssss_tttt  SHAD	Rs, Rt, Rd		//Arithmetic Shift
+b_0000_1111_dddd_ssss_tttt  SHLD	Rs, Rt, Rd		//Logical Shift
+
+b_0001_0000_dddd_ssss_iiii  MOVB	Rs, @(Rd, disp4)
+
+
+Instructions:
+* OOdst, Arith Ops
+* 00000: NOP / TRAP
+* 010ds: MOV      Rs, Rd            //Move value between registers
+* 011st: CMPEQ    Rs, Rt            //Slot 1, Compare for Equality
+* 012st: CMPGT    Rs, Rt            //Slot 1, Compare for Greater Than (Signed)
+* 013st: CMPHI    Rs, Rt            //Slot 1, Compare for Greater Than (Unsigned)
+* 014st: TST      Rs, Rt            //Slot 1, Compare for ((Rs&Rt)==0)
+* 015ii: ADJSP    #imm8s, SP        //Adjust SP by imm8s*16
+* 016xx: -
+* 01700: RTS                        //Slot 1, Return from Subroutine (Link Register)
+* 01701: RTE                        //Slot 1, Return from Exception
+* 01702: RTS/SP                     //Slot 1, Return from Subroutine (SP-8)
+* 01703: STC/SP                     //Slot 1, Save Link Register to (SP-8)
+* 018si: MOVQ     Rs, @(SP, disp4)  // 0..15, Store to Stack Frame
+* 019si: MOVQ     Rs, @(SP, disp4)  //16..31
+* 01Asi: MOVQ     Rs, @(SP, disp4)  //32..47
+* 01Bsi: MOVQ     Rs, @(SP, disp4)  //48..63
+* 01Cdi: MOVQ     @(SP, disp4), Rd  // 0..15, Load from Stack Frame
+* 01Ddi: MOVQ     @(SP, disp4), Rd  //16..31
+* 01Edi: MOVQ     @(SP, disp4), Rd  //32..47
+* 01Fdi: MOVQ     @(SP, disp4), Rd  //48..63
+* 02iii: BSR      label           //Slot 1, Branch Subroutine
+* 03iii: BRA      label           //Slot 1, Branch Unconditional
+* 04iii: BT       label           //Slot 1, Branch True
+* 05iii: BF       label           //Slot 1, Branch False
+* 06dst: SELT     Rs, Rt, Rd      //Select Rs or Rt based on SR.T
+* 07dii: MOV      #imm8s, Rd      //Narrow Constant
+* 08dst: ADD      Rs, Rt, Rd
+* 09dst: SUB      Rs, Rt, Rd
+* 0Adst: MUL      Rs, Rt, Rd      //Narrow Multiply
+* 0Bdst: AND      Rs, Rt, Rd
+* 0Cdst: OR       Rs, Rt, Rd
+* 0Ddst: XOR      Rs, Rt, Rd
+* 0Edst: SHAD     Rs, Rt, Rd        //Arithmetic Shift
+* 0Fdst: SHLD     Rs, Rt, Rd        //Logical Shift
+* 10dsi: MOVD     Rs, @(Rd, disp4)  //Store DWord
+* 11dsi: MOVQ     Rs, @(Rd, disp4)  //Store QWord
+* 12dsi: MOVD     @(Rs, disp4), Rd  //Load DWord (Sign Extend)
+* 13dsi: MOVQ     @(Rs, disp4), Rd  //Load QWord
+* 14dst: MOVB     Rs, @(Rd, Rt)     //Store Byte
+* 15dst: MOVW     Rs, @(Rd, Rt)     //Store Word
+* 16dst: MOVD     Rs, @(Rd, Rt)     //Store DWord
+* 17dst: MOVQ     Rs, @(Rd, Rt)     //Store QWord
+* 18dst: MOVSB    @(Rs, Rt), Rd     //Load Byte (Sign Extend)
+* 19dst: MOVSW    @(Rs, Rt), Rd     //Load Word (SX)
+* 1Adst: MOVSD    @(Rs, Rt), Rd     //Load DWord (SX)
+* 1Bdst: MOVQ     @(Rs, Rt), Rd     //Load QWord
+* 1Cdst: MOVUB    @(Rs, Rt), Rd     //Load Byte (Zero Extend)
+* 1Ddst: MOVUW    @(Rs, Rt), Rd     //Load Word (ZX)
+* 1Edst: MOVUD    @(Rs, Rt), Rd     //Load DWord (ZX)
+** If Rt==R15, interpret as 0.
+
+
+Also Possible:
+* Encode the ops as BJX1-64A's CC0e-xxxx block, just exxxx.
+* Ops for which 'e' doesn't apply will be special.
+
+* e0nm0  -
+* e0nm1  -
+* e0nm2  STC		Cm, Rn
+* e0nm3  -
+* e0nm4  MOV.B	Rm, @(Rn, R0)
+* e0nm5  MOV.W	Rm, @(Rn, R0)
+* e0nm6  MOV.L/Q	Rm, @(Rn, R0)
+* e0nm7  -
+* e0nm8  
+*  e0z08 CLRT
+*  e0z18 SETT
+*  e0z28 CLRMAC ?
+*  e0z38 LDTLB ?
+*  e0z48 CLRS
+*  e0z58 CLRS
+*  e0z68 NOTT
+* e0nm9
+*  e0z09 NOP
+* e0nmA  STS		Sm, Rn
+* e0nmB  
+*  e0z0B RTS
+*  e0z1B SLEEP
+*  e0z2B RTE
+*  e0z3B BREAK
+*  e0z4B -
+*  e0z5B -
+*  e0z6B RTS/N
+*  e0m7B RTV/N
+
+* e0nmC  MOV.B	@(Rm, R0), Rn
+* e0nmD  MOV.W	@(Rm, R0), Rn
+* e0nmE  MOV.L/Q	@(Rm, R0), Rn
+* e0nmF  -
+
+* e1nmd  MOV.L/Q  Rm, @(Rn, disp5)
+
+* e2nm0  MOV.B Rm, @Rn			//Store Byte Rm to @Rn
+* e2nm1  MOV.W Rm, @Rn			//Store Word Rm to @Rn
+* e2nm2  MOV.L/Q Rm, @Rn		//Store DWord Rm to @Rn
+* e2nm3  -
+* e2nm4  MOV.B Rm, @-Rn		//Store Rm to Byte @Rn then Rn=Rn-1
+* e2nm5  MOV.W Rm, @-Rn		//Store Rm to Word @Rn then Rn=Rn-2
+* e2nm6  MOV.L/Q Rm, @-Rn		//Store Rm to DWord @Rn then Rn=Rn-4
+* e2nm7  -
+* e2nm8  TST Rm, Rn			//Test Rm&Rn, updating SR.T
+* e2nm9  AND Rm, Rn			//And Rm and Rn, Storing result in Rn
+* e2nmA  XOR Rm, Rn			//Xor Rm and Rn, Storing result in Rn
+* e2nmB  OR  Rm, Rn			//Or Rm and Rn, Storing result in Rn
+* e2nmC  -
+* e2nmD  -
+* e2nmE  -
+* e2nmF  -
+
+* e3nm0  CMPEQ Rm, Rn			//Compare for Equality
+* e3nm1  -
+* e3nm2  CMPHS Rm, Rn			//Compare for unsigned Greater/Equal
+* e3nm3  CMPGE Rm, Rn			//Compare for signed Greater/Equal
+* e3nm4  -
+* e3nm5  -
+* e3nm6  CMPHI Rm, Rn			//Compare for unsigned Greater
+* e3nm7  CMPGT Rm, Rn			//Compare for signed Greater
+* e3nm8  SUB Rm, Rn				//Subtract
+* e3nm9  -
+* e3nmA  SUBC Rm, Rn			//Subtract, Carry -> T
+* e3nmB  SUBV Rm, Rn			//Subtract, Overflow -> T
+* e3nmC  ADD Rm, Rn				//Add
+* e3nmE  ADDC Rm, Rn			//Add with Carry, Carry -> T
+* e3nmF  ADDV Rm, Rn			//Add, Overflow -> T
+
+* e4nm0  -
+* e4nm1  -
+* e4nm2  STS Sm, @-Rn
+* e4nm3  STC Cm, @-Rn
+* e4nm4  -
+* e4nm5  -
+* e4nm6  LDS @Rn+, Sm
+* e4nm7  LDC @Rn+, Cm
+* e4nm8  -
+* e4nm9  -
+* e4nmA  LDS Rn, Sm
+* e4nmB  -
+* e4nmC  SHAD.L/Q Rm, Rn
+* e4nmD  SHLD.L/Q Rm, Rn
+* e4nmE  LDC Rn, Cm
+* e4nmF  -
+
+* e5nmd  MOV.L/Q @(Rm,disp5), Rn	//Load DWord From Rm+(4|8)*Disp
+
+* e6nm0  MOV.B @Rm, Rn				//B: Zero extend to QWord
+* e6nm1  MOV.W @Rm, Rn				//B: Zero extend to QWord
+* e6nm2  MOV.L/Q @Rm, Rn			//B: Extend to QWord
+* e6nm3  MOV Rm, Rn
+* e6nm4  MOV.B @Rm+, Rn
+* e6nm5  MOV.W @Rm+, Rn
+* e6nm6  MOV.L/Q @Rm+, Rn			//B: Extend to QWord
+* e6nm7  NOT Rm, Rn
+* e6nm8  SWAP.B Rm, Rn				//Swap Bytes
+* e6nm9  SWAP.W Rm, Rn				//Swap Words
+* e6nmA  NEGC Rm, Rn
+* e6nmB  NEG Rm, Rn
+* e6nmC  EXTU.B Rm, Rn
+* e6nmD  EXTU.W/L Rm, Rn
+* e6nmE  EXTS.B Rm, Rn
+* e6nmF  EXTS.W/L Rm, Rn
+
+* e7nii  ADD #imm8s, Rn				//Add 8-bit Immed
+
+* e80ii  -
+* e81dd  BRA/N disp8s
+* e82ii  -
+* e83dd  BSR/N disp8s
+* e84ii  -
+* e85dd  BRA disp8s
+* e86ii  -
+* e87dd  BSR disp8s
+* e88ii  -
+* e89dd  BT disp8s
+* e8Aii  -
+* e8Bdd  BF disp8s
+* e8Cii  -
+* e8Ddd  BTS disp8s
+* e8Eii  -
+* e8Fdd  BFS disp8s
+
+* e9nii  LDSH #imm8s, Rn			//Rn=(Rn<<8)+Imm8s
+
+* eAnmo  MOV.L/Q Rm, @(Rn,Ro)		//Store Rm to Rn+(4|8)*Ro
+* eBnmd  MOV.L/Q @(Rm,Ro), Rn		//Load From Rm+(4|8)*Ro
+
+* C---
+* D---
+* eEnii  MOV #imm8, Rn		//Load 8-bit constant, supports Quad
+* F---

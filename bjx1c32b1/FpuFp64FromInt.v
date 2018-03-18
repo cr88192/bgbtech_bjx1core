@@ -1,23 +1,20 @@
-module FpuFpD_Add(
-	/* verilator lint_off UNUSED */
+module FpuFp64FromInt(
 	clk,
 	enable,
-	doSub,
-	srca,
-	srcb,
+	is32,
+	src,
 	dst
 );
 
 input			clk;
 input			enable;
-input			doSub;
-input[63:0]		srca;
-input[63:0]		srcb;
+input			is32;
+
+input[63:0]		src;
 output[63:0]	dst;
 
-reg sgna;
-reg sgnb;
-reg sgnc;
+reg		sgn;
+reg		sgnc;
 
 reg[12:0] exa;
 reg[12:0] exb;
@@ -45,60 +42,47 @@ reg[12:0] tExc_C;
 reg[12:0] tExc_D;
 reg[12:0] tExc_E;
 
-reg[63:0]		tDst;
+reg[63:0] tDst;
 
 assign dst = tDst;
 
-
-always @*
+always @ (clk && enable)
 begin
-	sgna=srca[63];
-	sgnb=srcb[63];
+	sgnc = 0;
 
-	exa[10:0]=srca[62:52];
-	exb[10:0]=srcb[62:52];
-	exa[12:11]=0;
-	exb[12:11]=0;
-
-	exm=(exa>=exb)?exa:exb;
-
-	if(sgna)
+	if(is32)
 	begin
-		tFracA[63:52]=~(12'h1);
-		tFracA[51:0]=~(srca[51:0]);
+		if(src[31])
+		begin
+			sgn = 1;
+			tFracC2[63:32] = 0;
+			tFracC2[31:0] = ~(src[31:0]);
+			exm = 1023 + 52;
+		end
+		else
+		begin
+			sgn = 0;
+			tFracC2[63:32] = 0;
+			tFracC2[31:0] = src[31:0];
+			exm = 1023 + 52;
+		end
 	end
 	else
 	begin
-		tFracA[63:52]=12'h1;
-		tFracA[51:0]=srca[51:0];
+		if(src[63])
+		begin
+			sgn = 1;
+			tFracC2[63:0] = ~(src[63:0]);
+			exm = 1023 + 52;
+		end
+		else
+		begin
+			sgn = 0;
+			tFracC2[63:0] = src[63:0];
+			exm = 1023 + 52;
+		end
 	end
 
-	if(sgnb^doSub)
-	begin
-		tFracB[63:52]=~(12'h1);
-		tFracB[51:0]=~(srcb[51:0]);
-	end
-	else
-	begin
-		tFracB[63:52]=12'h1;
-		tFracB[51:0]=srcb[51:0];
-	end
-
-	tFracA1=tFracA>>>(exm-exa);
-	tFracB1=tFracB>>>(exm-exb);
-	tFracC1=tFracA1+tFracB1;
-	
-	if(tFracC1[63])
-	begin
-		sgnc=1;
-		tFracC2=~tFracC1;
-	end
-	else
-	begin
-		sgnc=0;
-		tFracC2=tFracC1;
-	end
-	
 	if(tFracC2[52:0]==0)
 	begin
 		sgnc=0;
@@ -106,7 +90,7 @@ begin
 		exc=0;
 	end
 	else
-		if(tFracC2[53:52]==0)
+		if(tFracC2[63:52]==0)
 	begin
 
 		if(tFracC2[52:21]==0)
@@ -177,15 +161,51 @@ begin
 	end
 	else
 	begin
-		if(tFracC2[53])
+		tFracC2_B=tFracC2;
+		tExc_B=exm;
+
+		if(tFracC2_B[63:60]!=0)
 		begin
-			tFracC=tFracC2>>1;
-			exc=exm+1;
+			tFracC2_C=tFracC2_B>>8;
+			tExc_C=tExc_B+8;
 		end
 		else
 		begin
-			tFracC=tFracC2;
-			exc=exm;
+			tFracC2_C=tFracC2_B;
+			tExc_C=tExc_B;
+		end
+		
+		if(tFracC2_C[59:56]!=0)
+		begin
+			tFracC2_D=tFracC2_C>>4;
+			tExc_D=tExc_C+4;
+		end
+		else
+		begin
+			tFracC2_D=tFracC2_C;
+			tExc_D=tExc_C;
+		end
+		
+		if(tFracC2_D[55:54]==0)
+		begin
+			tFracC2_E=tFracC2_D>>2;
+			tExc_E=tExc_D+2;
+		end
+		else
+		begin
+			tFracC2_E=tFracC2_D;
+			tExc_E=tExc_D;
+		end
+
+		if(tFracC2_E[53])
+		begin
+			tFracC=tFracC2_E>>1;
+			exc=tExc_E+1;
+		end
+		else
+		begin
+			tFracC=tFracC2_E;
+			exc=tExc_E;
 		end
 	end
 	
@@ -204,6 +224,13 @@ begin
 		tDst[62:52]=exc[10:0];
 		tDst[51:0]=tFracC[51:0];
 	end
+	
+//	dst=tDst;
+end
+
+always @ (posedge clk)
+begin
+//	dst <= tDst;
 end
 
 endmodule

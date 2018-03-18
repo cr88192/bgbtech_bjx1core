@@ -11,7 +11,9 @@ This cache operates inside the virtual address space.
 
 */
 
-module IcTile2(
+`include "CoreDefs.v"
+
+module IcTile3(
 	/* verilator lint_off UNUSED */
 	clock, reset,
 	regInPc,
@@ -23,13 +25,13 @@ module IcTile2(
 input			clock;
 input			reset;
 
-input[31:0]		regInPc;		//input PC address
-output[47:0]	regOutPcVal;	//output PC value
+input[63:0]		regInPc;		//input PC address
+output[127:0]	regOutPcVal;	//output PC value
 output[1:0]		regOutPcOK;		//set if we have a valid value.
 
 input[127:0]	memPcData;		//memory PC data
 input[1:0]		memPcOK;		//memory PC OK
-output[31:0]	memPcAddr;		//memory PC address
+output[63:0]	memPcAddr;		//memory PC address
 output			memPcOE;		//memory PC output-enable
 
 
@@ -54,10 +56,10 @@ reg[31:0]	tRegInPc4;
 reg[63:0]	tBlkData1;
 reg[63:0]	tBlkData2;
 
-reg[47:0]	tRegOutPcVal;
+reg[127:0]	tRegOutPcVal;
 reg[1:0]	tRegOutPcOK;
 
-reg[31:0]	tMemPcAddr;		//memory PC address
+reg[63:0]	tMemPcAddr;		//memory PC address
 reg			tMemPcOE;		//memory PC output-enable
 
 reg[27:0]	reqNeedAd;
@@ -86,16 +88,16 @@ reg[159:0]	nxtReqTempBlk;
 
 reg[159:0]	accTempBlk;
 
-always @ (clock)
+always @*
 begin
-	tRegInPc1=regInPc;
-	tRegInPc2=regInPc+4;
+	tRegInPc1=regInPc[31:0];
+	tRegInPc2=regInPc[31:0]+4;
 	tBlkNeedAd1=tRegInPc1[31:4];
 	tBlkNeedAd2=tRegInPc2[31:4];
 	
-	tRegOutPcVal=48'h0F3B_0F3B_0F3B;
+//	tRegOutPcVal=48'h0F3B_0F3B_0F3B;
 	
-//	tRegOutPcVal=0;
+	tRegOutPcVal=0;
 	tRegOutPcOK=0;
 
 	nReqNeedAd=0;
@@ -112,14 +114,14 @@ begin
 //		accTempBlk[159:128]=icBlkA[tBlkNeedAd2[7:0]];
 
 		case(regInPc[3:1])
-		3'b000: tRegOutPcVal=accTempBlk[ 47:  0];
-		3'b001: tRegOutPcVal=accTempBlk[ 63: 16];
-		3'b010: tRegOutPcVal=accTempBlk[ 79: 32];
-		3'b011: tRegOutPcVal=accTempBlk[ 95: 48];
-		3'b100: tRegOutPcVal=accTempBlk[111: 64];
-		3'b101: tRegOutPcVal=accTempBlk[127: 80];
-		3'b110: tRegOutPcVal=accTempBlk[143: 96];
-		3'b111: tRegOutPcVal=accTempBlk[159:112];
+		3'b000: tRegOutPcVal=accTempBlk[127:  0];
+		3'b001: tRegOutPcVal={ 64'h0, accTempBlk[ 79: 16] };
+		3'b010: tRegOutPcVal={ 64'h0, accTempBlk[ 95: 32] };
+		3'b011: tRegOutPcVal={ 64'h0, accTempBlk[111: 48] };
+		3'b100: tRegOutPcVal={ 64'h0, accTempBlk[127: 64] };
+		3'b101: tRegOutPcVal={ 64'h0, accTempBlk[143: 80] };
+		3'b110: tRegOutPcVal={ 64'h0, accTempBlk[159: 96] };
+		3'b111: tRegOutPcVal={ 80'h0, accTempBlk[159:112] };
 		endcase
 		tRegOutPcOK=1;
 	end

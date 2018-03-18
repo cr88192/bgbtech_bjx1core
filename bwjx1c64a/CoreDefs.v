@@ -190,6 +190,20 @@ parameter[6:0] UREG_R14			= 7'h0E;	//
 parameter[6:0] UREG_R15			= 7'h0F;	//
 
 parameter[6:0] UREG_R16			= 7'h10;	//
+parameter[6:0] UREG_R17			= 7'h11;	//
+parameter[6:0] UREG_R18			= 7'h12;	//
+parameter[6:0] UREG_R19			= 7'h13;	//
+parameter[6:0] UREG_R20			= 7'h14;	//
+parameter[6:0] UREG_R21			= 7'h15;	//
+parameter[6:0] UREG_R22			= 7'h16;	//
+parameter[6:0] UREG_R23			= 7'h17;	//
+parameter[6:0] UREG_R24			= 7'h18;	//
+parameter[6:0] UREG_R25			= 7'h19;	//
+parameter[6:0] UREG_R26			= 7'h1A;	//
+parameter[6:0] UREG_R27			= 7'h1B;	//
+parameter[6:0] UREG_R28			= 7'h1C;	//
+parameter[6:0] UREG_R29			= 7'h1D;	//
+parameter[6:0] UREG_R30			= 7'h1E;	//
 parameter[6:0] UREG_R31			= 7'h1F;	//
 
 // parameter[6:0] UREG_R0B			= 7'h20;	//
@@ -376,6 +390,8 @@ parameter[4:0]		UXFORM_MOV_NS	= 5'h4;
 	8Eod_XnmX  MOV.x @(Rm, Ro, disp4), Rn
 	CEeo_XnmX  MOV.x Rm, @(Rn, Ro)
 	CEeo_XnmX  MOV.x @(Rm, Ro), Rn
+
+	CEet_XnsX  AROP Rs, Rt, Rn
 */
 parameter[4:0]		UXFORM_MOV_NSO	= 5'h5;
 
@@ -408,20 +424,23 @@ parameter[4:0]		UXFORM_ARI_NS	= 5'h8;
 
 /*
 	XnmX       OP Rm, Rn
-	8Ezz_XnmX  OP Rm, #Imm, Rn
+	8Ezz_XnmX  OP Rm, #Imm8, Rn
+	CEfz_XnmX  OP Rm, #Imm6, Rn
 */
 parameter[4:0]		UXFORM_ARI_NST	= 5'h9;
 
 
 /*
 	XnmX		CMP Rm, Rn
-	8Eii_XniX	OP #Imm, Rn
+	8Eii_XniX	OP #Imm12, Rn
+	CEfi_XniX	OP #Imm10, Rn
 */
 parameter[4:0]		UXFORM_CMP_ST	= 5'hA;
 
 
 /*
 	XstX		ARI Rt, Rs
+	CEeXXstX	ARI Rt, Rs
 */
 parameter[4:0]		UXFORM_ARI_ST	= 5'hB;
 
@@ -478,6 +497,10 @@ parameter[4:0]		UXFORM_FPARI_NST_8E	= 5'h14;
 	8Emo_XnXX  MOV.x Rm, @(Rn, Ro)
 	8Emo_XnXX  MOV.x @(Rm, Ro), Rn
 	8Est_XnXX  AROP Rs, Rt, Rn
+
+/	CEeo_XnmX  MOV.x Rm, @(Rn, Ro)
+/	CEeo_XnmX  MOV.x @(Rm, Ro), Rn
+/	CEet_XnsX  AROP Rs, Rt, Rn
 */
 parameter[4:0]		UXFORM_NST_8E	= 5'h15;
 
@@ -486,6 +509,11 @@ parameter[4:0]		UXFORM_NST_8E	= 5'h15;
 */
 parameter[4:0]		UXFORM_MOV_SP4RN	= 5'h16;
 parameter[4:0]		UXFORM_MOV_GD8R0_MR	= 5'h17;
+
+/*
+	XEii_Xiii		#imm20, R0
+ */
+parameter[4:0]		UXFORM_I20R0_XE		= 5'h18;
 
 parameter[4:0]		UXFORM_INVALID		= 5'h1F;
 

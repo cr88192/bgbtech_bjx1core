@@ -60,17 +60,18 @@ parameter[7:0] UCMD_ALU_DMULU	= 8'h1E;	//DMULU
 parameter[7:0] UCMD_ALU_DMULS	= 8'h1F;	//DMULS
 
 parameter[7:0] UCMD_FPU_NONE	= 8'h20;
-parameter[7:0] UCMD_FPU_ADD		= 8'h21;	//srca+srcb
-parameter[7:0] UCMD_FPU_SUB		= 8'h22;	//srca-srcb
-parameter[7:0] UCMD_FPU_MUL		= 8'h23;	//srca*srcb
-parameter[7:0] UCMD_FPU_MSC		= 8'h24;	//srcc-(srca*srcb)
-parameter[7:0] UCMD_FPU_ABS		= 8'h25;	//|srcb|
-parameter[7:0] UCMD_FPU_NEG		= 8'h26;	//-srcb
-parameter[7:0] UCMD_FPU_RCP		= 8'h27;	//(1/x), rough approx
-parameter[7:0] UCMD_FPU_SQRT	= 8'h28;	//sqrt(x), rough approx
-parameter[7:0] UCMD_FPU_MAC		= 8'h29;	//srcc+(srca*srcb)
-parameter[7:0] UCMD_FPU_CMPEQ	= 8'h2A;	//srca==srcb
-parameter[7:0] UCMD_FPU_CMPGT	= 8'h2B;	//srca>srcb
+parameter[7:0] UCMD_FPU_FADD	= 8'h21;	//srca+srcb
+parameter[7:0] UCMD_FPU_FSUB	= 8'h22;	//srca-srcb
+parameter[7:0] UCMD_FPU_FMUL	= 8'h23;	//srca*srcb
+// parameter[7:0] UCMD_FPU_FMSC	= 8'h24;	//srcc-(srca*srcb)
+parameter[7:0] UCMD_FPU_FABS	= 8'h25;	//|srcb|
+parameter[7:0] UCMD_FPU_FNEG	= 8'h26;	//-srcb
+parameter[7:0] UCMD_FPU_FRCP	= 8'h27;	//(1/x), rough approx
+parameter[7:0] UCMD_FPU_FSQRT	= 8'h28;	//sqrt(x), rough approx
+// parameter[7:0] UCMD_FPU_FMAC	= 8'h29;	//srcc+(srca*srcb)
+parameter[7:0] UCMD_FPU_FCMPEQ	= 8'h2A;	//srca==srcb
+parameter[7:0] UCMD_FPU_FCMPGT	= 8'h2B;	//srca>srcb
+
 parameter[7:0] UCMD_FPU_CNVSD	= 8'h2C;	//single to double
 parameter[7:0] UCMD_FPU_CNVDS	= 8'h2D;	//double to single
 parameter[7:0] UCMD_FPU_CNVSI	= 8'h2E;	//float to int
@@ -159,6 +160,25 @@ parameter[7:0] UCMD_CMPQ_HI		= 8'h7A;	//Rs>Rt
 parameter[7:0] UCMD_CMPQ_GE		= 8'h7B;	//Rs>=Rt
 parameter[7:0] UCMD_CMPQ_HS		= 8'h7C;	//Rs>=Rt
 parameter[7:0] UCMD_CMPQ_TST	= 8'h7D;	//!(Rs&Rt)
+
+
+// parameter[7:0] UCMD_FPU_NONE	= 8'hA0;
+parameter[7:0] UCMD_FPU_DADD	= 8'hA1;	//srca+srcb
+parameter[7:0] UCMD_FPU_DSUB	= 8'hA2;	//srca-srcb
+parameter[7:0] UCMD_FPU_DMUL	= 8'hA3;	//srca*srcb
+parameter[7:0] UCMD_FPU_DMSC	= 8'hA4;	//srcc-(srca*srcb)
+parameter[7:0] UCMD_FPU_DABS	= 8'hA5;	//|srcb|
+parameter[7:0] UCMD_FPU_DNEG	= 8'hA6;	//-srcb
+parameter[7:0] UCMD_FPU_DRCP	= 8'hA7;	//(1/x), rough approx
+parameter[7:0] UCMD_FPU_DSQRT	= 8'hA8;	//sqrt(x), rough approx
+parameter[7:0] UCMD_FPU_DMAC	= 8'hA9;	//srcc+(srca*srcb)
+parameter[7:0] UCMD_FPU_DCMPEQ	= 8'hAA;	//srca==srcb
+parameter[7:0] UCMD_FPU_DCMPGT	= 8'hAB;	//srca>srcb
+
+//parameter[7:0] UCMD_FPU_CNVSD	= 8'hAC;	//single to double
+//parameter[7:0] UCMD_FPU_CNVDS	= 8'hAD;	//double to single
+//parameter[7:0] UCMD_FPU_CNVSI	= 8'hAE;	//float to int
+//parameter[7:0] UCMD_FPU_CNVIS	= 8'hAF;	//int to float
 
 
 parameter[7:0] UCMDP_ALU_DIV0U	= 8'h01;	//

@@ -1,18 +1,20 @@
+/*
+ * Pipeline: IF D1 D2 EX WB
+ */
+
 `include "CoreDefs.v"
 `include "Dc2Tile.v"
 `include "DcTile3.v"
 `include "IcTile2.v"
 
-`include "RegGPR2.v"
-// `include "RegFPR.v"
-// `include "RegFPR2.v"
+`include "RegGPR3.v"
 
 `include "DecOp4.v"
 // `include "DecOp3.v"
 `include "ExOp2.v"
 // `include "FpuFpD.v"
 
-`include "TxtNtModW.v"
+// `include "TxtNtModW.v"
 
 module ExUnit(
 	/* verilator lint_off UNUSED */
@@ -59,39 +61,11 @@ assign			mmioOE = dc2MmioOE;
 assign			mmioWR = dc2MmioWR;
 assign			dc2MmioOK = mmioOK;
 
-/* Debug */
-
-wire[3:0]	ntscPwm;
-wire[1:0]	ntscMmioOK;
-
-TxtNtModW txtntmod(
-	clock, reset, ntscPwm,
-	mmioAddr, mmioData,
-	mmioOE, mmioWR,
-	ntscMmioOK
-	);
 
 /* Baseline Registers */
 
-/*
-reg[63:0]		regMac;			//MACH:MACL
-reg[31:0]		regPr;			//PR
-reg[31:0]		regSGr;			//SGR (Saved R15)
-reg[31:0]		regFpul;		//FPUL
-reg[31:0]		regFpScr;		//FPSCR
-
-reg[31:0]		regSr;			//SR
-reg[31:0]		regGbr;			//GBR
-reg[31:0]		regVbr;			//VBR
-reg[31:0]		regSSr;			//SSR
-reg[31:0]		regSPc;			//SPC
-reg[31:0]		regPc;			//PC
-
-reg[31:0]		regSp;			//SP/GR (R15)
-*/
-
-// /*
-wire[63:0]		regMac;			//MACH:MACL
+wire[31:0]		regMach;		//MACH
+wire[31:0]		regMacl;		//MACL
 wire[31:0]		regPr;			//PR
 wire[31:0]		regSGr;			//SGR (Saved R15)
 wire[31:0]		regFpul;		//FPUL
@@ -105,7 +79,7 @@ wire[31:0]		regSPc;			//SPC
 wire[31:0]		regPc;			//PC
 
 wire[31:0]		regSp;			//SP/GR (R15)
-// */
+
 
 reg[7:0]		regRstTok;
 reg[7:0]		regNextRstTok;
@@ -149,6 +123,7 @@ Dc2Tile		dcl2(
 	dc2MmioOE,		dc2MmioWR,			dc2MmioOK
 	);
 
+
 /* DCache */
 
 reg[31:0]	dcfRegInAddr;
@@ -180,9 +155,11 @@ DcTile3 dcf(
 	dcfMemOp
 	);
 
+
 /* IF */
-reg[31:0]	regIfPc;			//PC, Fetch
-reg[31:0]	regIfSr;			//SR, Fetch
+
+reg[31:0]	ifValPc;			//PC, Fetch
+reg[31:0]	ifValSr;			//SR, Fetch
 wire[47:0]	regIfPcVal;			//PC Instruction Value
 wire[1:0]	regIfPcOK;
 
@@ -192,20 +169,21 @@ wire		memIfPcOE;
 reg[1:0]	memIfPcOK;
 
 IcTile2 icf(clock, reset,
-	regIfPc,
+	ifValPc,
 	regIfPcVal, regIfPcOK,
 	memIfPcData,
 	memIfPcAddr, memIfPcOE, memIfPcOK);
 
 reg[47:0]	regIfPcVal2;		//PC Instruction Value
 
-/* ID */
+
+/* ID / D1 */
 
 reg[47:0]	regIdPcVal;			//PC Instruction Value
 reg[15:0]	regIdCsFl;			//Control State Flags
 
-reg[31:0]	regIdPc;			//ID PC Value
-reg[31:0]	regIdSr;			//ID SR Value
+reg[31:0]	idValPc;			//ID PC Value
+reg[31:0]	idValSr;			//ID SR Value
 
 wire[6:0] idRegN;
 wire[6:0] idRegS;
@@ -216,10 +194,10 @@ wire[3:0] idStepPc2;
 wire[7:0] idUCmd;
 
 reg[6:0]	idWbRegO;
-reg[31:0]	idWbRegValO;
+reg[63:0]	idWbRegValO;
 
 reg[6:0]	wbRegO;
-reg[31:0]	wbRegValO;
+reg[63:0]	wbRegValO;
 
 //DecOp2 dec(clock, regIdPcVal[31:0], regIdCsFl,
 // DecOp3 dec(
@@ -228,27 +206,50 @@ DecOp4 dec(
 	idRegN, idRegS, idRegT, idImm,
 	idStepPc, idStepPc2, idUCmd); 
 
-//assign idRegValN=0;
-//assign idRegValS=0;
-//assign idRegValT=0;
 
-wire[31:0] idRegValN;
-wire[31:0] idRegValS;
-wire[31:0] idRegValT;
+/* RF / D2 */
 
-RegGPR2 gpr(
+reg[31:0]	id2ValPc;
+reg[31:0]	id2ValSr;			//ID SR Value
+
+wire[31:0]	id2ValPrPc;
+assign		id2ValPrPc = id2ValPc + {28'h0, id2StepPc} + 2;
+
+reg[47:0]	regId2PcVal;		//PC Instruction Value
+reg[15:0]	regId2CsFl;			//Control State Flags
+
+reg[6:0]	id2RegN;
+reg[6:0]	id2RegS;
+reg[6:0]	id2RegT;
+reg[31:0]	id2Imm;
+reg[3:0]	id2StepPc;
+reg[3:0]	id2StepPc2;
+reg[7:0]	id2UCmd;
+
+wire[63:0]	id2RegValN;
+wire[63:0]	id2RegValS;
+wire[63:0]	id2RegValT;
+
+reg[1:0]	id2RegFpLdMode;
+reg[1:0]	idWbRegFpStMode;
+
+
+RegGPR3 gpr(
 	clock,		reset || (regRstTok != 8'h55),
-	idRegS,		idRegValS,
-	idRegT,		idRegValT,
-	idRegN,		idRegValN,
+	id2RegS,	id2RegValS,
+	id2RegT,	id2RegValT,
+	id2RegN,	id2RegValN,
 	idWbRegO,	idWbRegValO,
-	regIdSr,	tRegExHold,
-	idImm,
+	id2ValSr,	tRegExHold,
+	id2Imm,		id2ValPrPc,
+	id2RegFpLdMode,
+	idWbRegFpStMode,
 
 	regSr,		exNextSr2,
 	regPr,		exNextPr2,
 	regPc,		exNextPc2,
-	regMac,		exNextMac2,
+	regMach,	exNextMach2,
+	regMacl,	exNextMacl2,
 	regSp,		exNextSp2,
 	regGbr,		exNextGbr2,
 	regVbr,		exNextVbr2,
@@ -259,58 +260,11 @@ RegGPR2 gpr(
 	regFpScr,	exNextFpScr2
 	);
 
-wire[63:0]		idRegFpValN;
-wire[63:0]		idRegFpValS;
-wire[63:0]		idRegFpValT;
-reg[1:0]		idRegFpMode;
-reg[1:0]		idRegFpStMode;
-wire[31:0]		idFpNextFpul;
+reg[7:0]	id2UCmd2;
+reg[63:0]	id2RegValN2;
+reg[63:0]	id2RegValS2;
+reg[63:0]	id2RegValT2;
 
-reg[6:0]		idWbRegFpO;
-reg[63:0]		idWbRegFpValO;
-
-reg[6:0]		wbRegFpO;
-reg[63:0]		wbRegFpValO;
-
-// /*
-assign idRegFpValN=0;
-assign idRegFpValS=0;
-assign idRegFpValT=0;
-assign idFpNextFpul = regFpul;
-// */
-
-/*
-RegFPR fpr(clock, reset,
-	idRegS,			idRegFpValS,
-	idRegT,			idRegFpValT,
-	idRegN,			idRegFpValN,
-	idWbRegFpO,		idWbRegFpValO,
-	idRegFpMode,	regIdCsFl,
-	idRegFpStMode,
-	regFpul,		idFpNextFpul
-	);
-*/
-
-/*
-RegFPR2 fpr(clock, reset,
-	idRegS,			idRegFpValS,
-	idRegT,			idRegFpValT,
-	idRegN,			idRegFpValN,
-	idWbRegFpO,		idWbRegFpValO,
-	idRegFpMode,	regIdCsFl,
-	idRegFpStMode,
-	regFpul,		idFpNextFpul
-	);
-*/
-
-reg[7:0]	idUCmd2;
-reg[31:0]	idRegValN2;
-reg[31:0]	idRegValS2;
-reg[31:0]	idRegValT2;
-
-reg[63:0]	idRegFpValN2;
-reg[63:0]	idRegFpValS2;
-reg[63:0]	idRegFpValT2;
 
 /* EX */
 
@@ -328,20 +282,17 @@ reg[3:0]	exStepPc;
 reg[3:0]	exStepPc2;
 reg[7:0]	exUCmd;
 
-reg[31:0]	exRegValN;
-reg[31:0]	exRegValS;
-reg[31:0]	exRegValT;
-
-reg[63:0]	exRegFpValN;
-reg[63:0]	exRegFpValS;
-reg[63:0]	exRegFpValT;
+reg[63:0]	exRegValN;
+reg[63:0]	exRegValS;
+reg[63:0]	exRegValT;
 
 wire[6:0]	exRegO;
-wire[31:0]	exRegValO;
+wire[63:0]	exRegValO;
 wire[1:0]	exRegOutOK;
+wire[1:0]	exRegOutStMode;
 
 wire[31:0]	exMemAddr;			//memory address
-wire[31:0]	exMemData;			//memory data (write)
+wire[63:0]	exMemData;			//memory data (write)
 wire		exMemLoad;			//load from memory
 wire		exMemStore;			//store to memory
 wire[4:0]	exMemOpMode;		//mem op mode
@@ -350,7 +301,8 @@ wire[7:0]	exMemOpCmd2;		//mem EX chain
 wire[31:0]	exNextSr;			//SR in
 wire[31:0]	exNextPr;			//PR in
 wire[31:0]	exNextPc;			//PC in
-wire[63:0]	exNextMac;			//MACH:MACL
+wire[31:0]	exNextMach;			//MACH
+wire[31:0]	exNextMacl;			//MACL
 
 wire[31:0]	exNextGbr;			//GBR
 wire[31:0]	exNextVbr;			//VBR
@@ -359,6 +311,8 @@ wire[31:0]	exNextSPc;			//SPC
 wire[31:0]	exNextSGr;			//SGR (R15)
 
 wire[31:0]	exNextSp;			//SP out
+wire[31:0]	exNextFpul;			//SP out
+wire[31:0]	exNextFpScr;		//SP out
 
 
 ExOp2	exOp(clock, reset,
@@ -368,7 +322,7 @@ ExOp2	exOp(clock, reset,
 	exRegN,			exRegValN,
 	exImm,			tRegGenIdPc,
 	exRegO,			exRegValO,
-	exRegOutOK,
+	exRegOutOK,		exRegOutStMode,
 
 	exMemAddr,		exMemData,
 	exMemLoad,		exMemStore,
@@ -377,8 +331,11 @@ ExOp2	exOp(clock, reset,
 	regSr,			exNextSr,
 	regPr,			exNextPr,
 	regExPc,		exNextPc,
-	regMac,			exNextMac,
+	regMach,		exNextMach,
+	regMacl,		exNextMacl,
 	regSp,			exNextSp,
+	regFpul,		exNextFpul,
+	regFpScr,		exNextFpScr,
 
 	regGbr,			exNextGbr,
 	regVbr,			exNextVbr,
@@ -390,7 +347,8 @@ ExOp2	exOp(clock, reset,
 reg[31:0]	exNextSr2;			//SR in
 reg[31:0]	exNextPr2;			//PR in
 reg[31:0]	exNextPc2;			//PC in
-reg[63:0]	exNextMac2;			//MACH:MACL
+reg[31:0]	exNextMach2;		//MACH
+reg[31:0]	exNextMacl2;		//MACL
 
 reg[31:0]	exNextGbr2;			//GBR
 reg[31:0]	exNextVbr2;			//VBR
@@ -403,31 +361,6 @@ reg[31:0]	exNextFpScr2;		//
 reg[31:0]	exNextSp2;			//
 
 
-wire[6:0]	exRegFpO;
-wire[63:0]	exRegFpValO;
-wire[1:0]	exRegFpModeO;
-
-wire[31:0]	exFpNextSr;			//
-wire[31:0]	exFpNextFpul;		//
-wire[31:0]	exFpNextFpScr;		//
-
-assign	exRegFpO = UREG_ZZR;
-assign	exRegFpValO = 0;
-assign	exRegFpModeO = 0;
-assign	exFpNextFpScr = regFpScr;		//
-
-/*
-FpuFpD	exFpu(clock,
-	exUCmd,		idRegFpMode,
-	exRegS,		exRegFpValS,
-	exRegT,		exRegFpValT,
-	exRegN,		exRegFpValN,
-	exRegFpO,	exRegFpValO,	exRegFpModeO,
-	regSr,		exFpNextSr,
-	regFpul,	exFpNextFpul,
-	regFpScr,	exFpNextFpScr
-	);
-*/
 
 reg[31:0]	tRegGenIdPc;			//Generated PC
 reg[31:0]	tRegGenIdPr;			//Generated PR
@@ -474,80 +407,53 @@ begin
 //	dcfMemPcOK		= UMEM_OK_READY;
 //	memIfPcOK		= UMEM_OK_READY;
 
-	idRegFpMode = 0;
-	idRegFpStMode = exRegFpModeO;
+	id2RegFpLdMode = 0;
+	idWbRegFpStMode = exRegOutStMode;
 
 	if(regFpScr[19])
-		idRegFpMode = 1;
+		id2RegFpLdMode = 1;
 	if(regFpScr[20])
-		idRegFpMode = 1;
+		id2RegFpLdMode = 1;
 
 	/* Non-Delay Branch, Next op becomes No-Op */
-	idUCmd2 = idUCmd;
+	id2UCmd2 = id2UCmd;
 	case(exUCmd)
-		UCMD_BRAN:	idUCmd2 = UCMD_NONE;
-		UCMD_BSRN:	idUCmd2 = UCMD_NONE;
-		UCMD_BT:	idUCmd2 = UCMD_NONE;
-		UCMD_BF:	idUCmd2 = UCMD_NONE;
-		UCMD_RTSN:	idUCmd2 = UCMD_NONE;
-		UCMD_RTEN:	idUCmd2 = UCMD_NONE;
+		UCMD_BRAN:	id2UCmd2 = UCMD_NONE;
+		UCMD_BSRN:	id2UCmd2 = UCMD_NONE;
+		UCMD_BT:	id2UCmd2 = UCMD_NONE;
+		UCMD_BF:	id2UCmd2 = UCMD_NONE;
+		UCMD_RTSN:	id2UCmd2 = UCMD_NONE;
+		UCMD_RTEN:	id2UCmd2 = UCMD_NONE;
 		default: begin end
 	endcase
 	
-//	tRegGenIdPc = regIdPc + {28'h0, idStepPc};
-//	tRegGenIdPc = regIdPc + {28'h0, idStepPc} + {28'h0, tRegGenIdStepPc};
-	tRegGenIdPc = regIfPc + {28'h0, tRegGenIdStepPc};
-//	tRegGenIdPr = regIdPc + {28'h0, idStepPc + 4'h2};
-//	tRegGenIdPr = regIdPc + {28'h0, exStepPc2 + 4'h2};
-	tRegGenIdPr = regIfPc + 32'h4;
+//	tRegGenIdPc = idValPc + {28'h0, idStepPc};
+//	tRegGenIdPc = idValPc + {28'h0, idStepPc} + {28'h0, tRegGenIdStepPc};
+	tRegGenIdPc = ifValPc + {28'h0, tRegGenIdStepPc};
+//	tRegGenIdPr = idValPc + {28'h0, idStepPc + 4'h2};
+//	tRegGenIdPr = idValPc + {28'h0, exStepPc2 + 4'h2};
+	tRegGenIdPr = ifValPc + 32'h4;
 	
-	idRegValN2 = idRegValN;
-	idRegValS2 = idRegValS;
-	idRegValT2 = idRegValT;
-
-	idRegFpValS2 = idRegFpValS;
-	idRegFpValT2 = idRegFpValT;
-	idRegFpValN2 = idRegFpValN;
+	id2RegValN2 = id2RegValN;
+	id2RegValS2 = id2RegValS;
+	id2RegValT2 = id2RegValT;
 
 	wbRegO = exRegO;
 	wbRegValO = exRegValO;
 
-	wbRegFpO = exRegFpO;
-	wbRegFpValO = exRegFpValO;
-
- /*
-	if(exMemLoad||exMemStore)
-	begin
-		if(dcfRegOutOK==UMEM_OK_OK)
-		begin
-			wbRegO = idRegN;
-			wbRegValO = dcfRegOutData[31:0];
-
-			wbRegFpO = idRegN;
-			wbRegFpValO = dcfRegOutData;
-		end
-	end
- */
-
 	/* Short Circuit / Bypass */
-	if(idRegS == wbRegO)
-		idRegValS2 = wbRegValO;
-	if(idRegT == wbRegO)
-		idRegValT2 = wbRegValO;	
-	if(idRegN == wbRegO)
-		idRegValN2 = wbRegValO;
-
-	if(idRegS == wbRegO)
-		idRegFpValS2 = wbRegFpValO;
-	if(idRegT == wbRegO)
-		idRegFpValT2 = wbRegFpValO;	
-	if(idRegN == wbRegO)
-		idRegFpValN2 = wbRegFpValO;
+	if(id2RegS == wbRegO)
+		id2RegValS2 = wbRegValO;
+	if(id2RegT == wbRegO)
+		id2RegValT2 = wbRegValO;	
+	if(id2RegN == wbRegO)
+		id2RegValN2 = wbRegValO;
 
 	exNextSr2 = exNextSr;
 	exNextPr2 = exNextPr;
 	exNextPc2 = exNextPc;
-	exNextMac2 = exNextMac;
+	exNextMach2 = exNextMach;
+	exNextMacl2 = exNextMacl;
 	exNextGbr2 = exNextGbr;
 	exNextVbr2 = exNextVbr;
 	exNextSSr2 = exNextSSr;
@@ -561,10 +467,10 @@ begin
 		regIfPcVal2 = 48'h0F09_0F09_0E09;
 	end
 
-	exNextFpul2 = idFpNextFpul;
-	exNextFpScr2 = exFpNextFpScr;
+	exNextFpul2 = exNextFpul;
+	exNextFpScr2 = exNextFpScr;
 
-	exNextFpScr2[11] = ntscPwm[3];	//debug
+//	exNextFpScr2[11] = ntscPwm[3];	//debug
 
 	exNextSp2 = exNextSp;
 
@@ -575,8 +481,8 @@ begin
 		tRegExHold = 1;
 	end
 
-	$display("IF: %X %X", regIfPc, regIfPcVal);
-	$display("ID: %X %X", regIdPc, regIdPcVal);
+	$display("IF: %X %X", ifValPc, regIfPcVal);
+	$display("ID: %X %X", idValPc, regIdPcVal);
 
 // /*
 	$display("EX: %X %X %X Rs:R%X=%X Rt:R%X=%X Rn:R%X=%X Wb:R%X=%X",
@@ -595,7 +501,7 @@ begin
 	regRstTok <= regNextRstTok;
 
 	dcfRegInAddr	<= exMemAddr;
-	dcfRegInData	<= {32'h0, exMemData};
+	dcfRegInData	<= exMemData;
 	dcfRegInOE		<= exMemLoad;
 	dcfRegInWR		<= exMemStore;
 	dcfRegInOp		<= exMemOpMode;
@@ -606,19 +512,13 @@ begin
 	if((exMemLoad||exMemStore) &&
 		(dcfRegOutOK==UMEM_OK_OK))
 	begin
-		idWbRegO <= idRegN;
-		idWbRegValO <= dcfRegOutData[31:0];
-
-		idWbRegFpO <= idRegN;
-		idWbRegFpValO <= dcfRegOutData;
+		idWbRegO	<= id2RegN;
+		idWbRegValO <= dcfRegOutData[63:0];
 	end
 	else
 	begin
 		idWbRegO		<= wbRegO;
 		idWbRegValO		<= wbRegValO;
-
-		idWbRegFpO		<= wbRegFpO;
-		idWbRegFpValO	<= wbRegFpValO;
 	end
 
 	if(memIfPcOE)
@@ -673,12 +573,12 @@ begin
 	/* Common */
 
 	/* IF */
-		regIfPc		<= 32'hA000_0000;
-		regIfSr		<= 0;
+		ifValPc		<= 32'hA000_0000;
+		ifValSr		<= 0;
 
 	/* ID */
-		regIdPc		<= 32'hA000_0000;
-		regIdSr		<= 0;
+		idValPc		<= 32'hA000_0000;
+		idValSr		<= 0;
 		regIdPcVal	<= 0;
 
 	/* EX */
@@ -697,33 +597,47 @@ begin
 	/* Common */
 
 	/* IF */
-		regIfPc		<= exNextPc2;
-		regIfSr		<= exNextSr2;
 
-	/* ID */
-		regIdPc		<= regIfPc;
-		regIdSr		<= regIfSr;
+		ifValPc		<= exNextPc2;
+		ifValSr		<= exNextSr2;
+
+	/* D1 */
+
+		idValPc		<= ifValPc;
+		idValSr		<= ifValSr;
 		regIdPcVal	<= regIfPcVal2;
 
-	/* EX */
-		regExPcVal	<= regIdPcVal;
-		regExCsFl	<= regIdCsFl;
-		regExPc		<= regIdPc;
-		regExSr		<= regIdSr;
-		exRegN		<= idRegN;
-		exRegS		<= idRegS;
-		exRegT		<= idRegT;
-		exImm		<= idImm;
-		exStepPc	<= idStepPc;
-		exStepPc2	<= idStepPc2;
-		exUCmd		<= idUCmd2;
-		exRegValN	<= idRegValN2;
-		exRegValS	<= idRegValS2;
-		exRegValT	<= idRegValT2;
+	/* D2 */
 
-		exRegFpValN	<= idRegFpValN2;
-		exRegFpValS	<= idRegFpValS2;
-		exRegFpValT	<= idRegFpValT2;
+		id2ValPc	<= idValPc;
+		id2ValSr	<= idValSr;
+		regId2PcVal	<= regIdPcVal;
+		regId2CsFl	<= regIdCsFl;
+		id2RegN		<= idRegN;
+		id2RegS		<= idRegS;
+		id2RegT		<= idRegT;
+		id2Imm		<= idImm;
+		id2StepPc	<= idStepPc;
+		id2StepPc2	<= idStepPc2;
+		id2UCmd		<= idUCmd;
+
+	/* EX */
+
+		regExPcVal	<= regId2PcVal;
+		regExCsFl	<= regId2CsFl;
+		regExPc		<= id2ValPc;
+		regExSr		<= id2ValSr;
+		exRegN		<= id2RegN;
+		exRegS		<= id2RegS;
+		exRegT		<= id2RegT;
+		exImm		<= id2Imm;
+		exStepPc	<= id2StepPc;
+		exStepPc2	<= id2StepPc2;
+		exUCmd		<= id2UCmd2;
+		exRegValN	<= id2RegValN2;
+		exRegValS	<= id2RegValS2;
+		exRegValT	<= id2RegValT2;
+
 	end
 	else
 	begin

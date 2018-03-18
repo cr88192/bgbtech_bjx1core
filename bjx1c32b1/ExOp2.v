@@ -18,16 +18,19 @@ Execute Module (32-bit)
 
 `include "ExShad32.v"
 
+`include "FpuFpF_Mul.v"
+`include "FpuFpF_Add.v"
+
 module ExOp2(
 	/* verilator lint_off UNUSED */
 	clock,		reset,
 	opCmd,		opStepPc,
-	regIdRs,	regValRs,
-	regIdRt,	regValRt,
-	regIdRn,	regValRn,
+	regIdRs,	regValRsB,
+	regIdRt,	regValRtB,
+	regIdRn,	regValRnB,
 	immValRi,	idInGenPc,
 	regOutId,	regOutVal,
-	regOutOK,
+	regOutOK,	regOutStMode,
 
 	memAddr,	memData,
 	memLoad,	memStore,
@@ -36,8 +39,11 @@ module ExOp2(
 	ctlInSr,	ctlOutSr,
 	ctlInPr,	ctlOutPr,
 	ctlInPc,	ctlOutPc,
-	ctlInMac,	ctlOutMac,
+	ctlInMach,	ctlOutMach,
+	ctlInMacl,	ctlOutMacl,
 	ctlInSp,	ctlOutSp,
+	ctlInFpul,	ctlOutFpul,
+	ctlInFpScr,	ctlOutFpScr,
 
 	ctlInGbr,	ctlOutGbr,
 	ctlInVbr,	ctlOutVbr,
@@ -57,18 +63,19 @@ input[6:0]		regIdRs;
 input[6:0]		regIdRt;
 input[6:0]		regIdRn;
 
-input[31:0]		regValRs;		//Rs input value
-input[31:0]		regValRt;		//Rt input value
-input[31:0]		regValRn;		//Rn input value
+input[63:0]		regValRsB;		//Rs input value
+input[63:0]		regValRtB;		//Rt input value
+input[63:0]		regValRnB;		//Rn input value
 input[31:0]		immValRi;		//immediate/disp value
 
-output[31:0]	regOutVal;		//Rn output value
+output[63:0]	regOutVal;		//Rn output value
 output[6:0]		regOutId;		//Rn, value to write
 output[1:0]		regOutOK;		//execute status
+output[1:0]		regOutStMode;	//output store mode
 
 /* Memory */
 output[31:0]	memAddr;		//memory address
-output[31:0]	memData;		//memory data (write)
+output[63:0]	memData;		//memory data (write)
 output			memLoad;		//load from memory
 output			memStore;		//store to memory
 output[4:0]		memOpMode;		//mem op mode
@@ -83,11 +90,18 @@ output[31:0]	ctlOutSr;		//SR out
 output[31:0]	ctlOutPr;		//PR out
 output[31:0]	ctlOutPc;		//PC out
 
-input[63:0]		ctlInMac;		//MACH:MACL in
-output[63:0]	ctlOutMac;		//MACH:MACL out
+input[31:0]		ctlInMach;		//MACH in
+input[31:0]		ctlInMacl;		//MACL in
+output[31:0]	ctlOutMach;		//MACH out
+output[31:0]	ctlOutMacl;		//MACL out
 
 input[31:0]		ctlInSp;		//SP in
 output[31:0]	ctlOutSp;		//SP out
+
+input[31:0]		ctlInFpul;		//SP in
+output[31:0]	ctlOutFpul;		//SP out
+input[31:0]		ctlInFpScr;		//SP in
+output[31:0]	ctlOutFpScr;	//SP out
 
 input[31:0]		ctlInGbr;
 input[31:0]		ctlInVbr;
@@ -102,13 +116,24 @@ output[31:0]	ctlOutSPc;
 output[31:0]	ctlOutSGr;
 
 
+wire[31:0]		regValRs;		//Rs input value
+wire[31:0]		regValRt;		//Rt input value
+wire[31:0]		regValRn;		//Rn input value
+
+assign		regValRs = regValRsB[31:0];
+assign		regValRt = regValRtB[31:0];
+assign		regValRn = regValRnB[31:0];
+
 /* Temporary */
 reg[31:0]	tRegOutVal;			//Rn, output value
 reg[6:0]	tRegOutId;			//Rn, output register
 reg[1:0]	tRegOutOK;			//execute status
+reg[1:0]	tRegOutStMode;		//register store mode
+
+reg[31:0]	tRegOutValHi;		//Rn, output value
 
 reg[31:0]	tMemAddr;			//memory address
-reg[31:0]	tMemData;			//memory data (write)
+reg[63:0]	tMemData;			//memory data (write)
 reg			tMemLoad;			//load from memory
 reg			tMemStore;			//store to memory
 reg[4:0]	tMemOpMode;			//mem op mode
@@ -133,6 +158,8 @@ reg[31:0]	tCtlOutPr;
 reg[31:0]	tCtlOutPc;
 reg[63:0]	tCtlOutMac;
 reg[31:0]	tCtlOutSp;
+reg[31:0]	tCtlOutFpul;
+reg[31:0]	tCtlOutFpScr;
 
 reg[31:0]	tCtlNxtPc;
 reg[31:0]	tCtlBraPc;
@@ -147,15 +174,21 @@ reg[31:0]	tCtlOutSGr;
 /* verilator lint_on UNOPTFLAT */
 
 
-assign regOutVal = tRegOutVal;
+// assign regOutVal = tRegOutVal;
+assign regOutVal = { tRegOutValHi, tRegOutVal };
 assign regOutId = tRegOutId;
 assign regOutOK = tRegOutOK;
+assign regOutStMode = tRegOutStMode;
 
 assign	ctlOutSr = tCtlOutSr;
 assign	ctlOutPr = tCtlOutPr;
 assign	ctlOutPc = tCtlOutPc;
-assign	ctlOutMac = tCtlOutMac;
+assign	ctlOutMach = tCtlOutMac[63:32];
+assign	ctlOutMacl = tCtlOutMac[31: 0];
 assign	ctlOutSp = tCtlOutSp;
+
+assign	ctlOutFpul = tCtlOutFpul;
+assign	ctlOutFpScr = tCtlOutFpScr;
 
 assign	ctlOutGbr = tCtlOutGbr;
 assign	ctlOutVbr = tCtlOutVbr;
@@ -200,12 +233,36 @@ reg			tAluQ2;
 reg			tAluM2;
 reg			tAluT2;
 
+
+reg fpaIsEn;
+reg fpmIsEn;
+wire fpaIsSub;
+
+wire[31:0] fpaSrcA;
+wire[31:0] fpaSrcB;
+wire[31:0] fpaDst;
+wire[31:0] fpmDst;
+
+FpuFpF_Add fpadd(
+	clock, fpaIsEn, fpaIsSub,
+	fpaSrcA, fpaSrcB, fpaDst);
+FpuFpF_Mul fpmul(
+	clock, fpmIsEn,
+	fpaSrcA, fpaSrcB, fpmDst);
+
+assign fpaSrcA = regValRs;
+assign fpaSrcB = regValRt;
+assign fpaIsSub = (opCmd==UCMD_FPU_FSUB);
+
+
 /* EX */
 always @*
 begin
+	tRegOutValHi = 32'hXXXXXXXX;
 	tRegOutVal=0;
 	tRegOutId=UREG_ZZR;
 	tRegOutOK=UMEM_OK_OK;
+	tRegOutStMode=0;
 	
 	tMemAddr=0;
 	tMemData=0;
@@ -226,6 +283,10 @@ begin
 	tShadValRt=8'hXX;
 	tShadOp=0;
 	
+	fpaIsEn = 0;
+	fpmIsEn = 0;
+//	fpaIsSub = 0;
+	
 	tTriggerExc=0;
 
 	tCtlNxtPc=ctlInPc+{28'h0, opStepPc};
@@ -235,8 +296,11 @@ begin
 	tCtlOutSr=ctlInSr;
 	tCtlOutPr=ctlInPr;
 	tCtlOutPc=idInGenPc;
-	tCtlOutMac=ctlInMac;
+	tCtlOutMac={ctlInMach, ctlInMacl};
 	tCtlOutSp=ctlInSp;
+
+	tCtlOutFpul=ctlInFpul;
+	tCtlOutFpScr=ctlInFpScr;
 
 	tCtlOutGbr = ctlInGbr;
 	tCtlOutVbr = ctlInVbr;
@@ -319,7 +383,7 @@ begin
 			if(regIdRt==UREG_MR_MEMDEC)
 			begin
 				tMemAddr=tAguAddr-1;
-				tMemData=regValRs;
+				tMemData=regValRsB;
 				tMemStore=1;
 				tRegOutVal=regValRn-1;
 				tRegOutId=regIdRn;
@@ -327,7 +391,7 @@ begin
 			else
 			begin
 				tMemAddr=tAguAddr;
-				tMemData=regValRs;
+				tMemData=regValRsB;
 				tMemStore=1;
 			end
 		end
@@ -338,7 +402,7 @@ begin
 			if(regIdRt==UREG_MR_MEMDEC)
 			begin
 				tMemAddr=tAguAddr-2;
-				tMemData=regValRs;
+				tMemData=regValRsB;
 				tMemStore=1;
 				tRegOutVal=regValRn-2;
 				tRegOutId=regIdRn;
@@ -346,7 +410,7 @@ begin
 			else
 			begin
 				tMemAddr=tAguAddr;
-				tMemData=regValRs;
+				tMemData=regValRsB;
 				tMemStore=1;
 			end
 		end
@@ -356,7 +420,7 @@ begin
 			if(regIdRt==UREG_MR_MEMDEC)
 			begin
 				tMemAddr=tAguAddr-4;
-				tMemData=regValRs;
+				tMemData=regValRsB;
 				tMemStore=1;
 				tRegOutVal=regValRn-4;
 				tRegOutId=regIdRn;
@@ -364,7 +428,7 @@ begin
 			else
 			begin
 				tMemAddr=tAguAddr;
-				tMemData=regValRs;
+				tMemData=regValRsB;
 				tMemStore=1;
 			end
 		end
@@ -374,7 +438,7 @@ begin
 			if(regIdRt==UREG_MR_MEMDEC)
 			begin
 				tMemAddr=tAguAddr-8;
-				tMemData=regValRs;
+				tMemData=regValRsB;
 				tMemStore=1;
 				tRegOutVal=regValRn-8;
 				tRegOutId=regIdRn;
@@ -382,7 +446,7 @@ begin
 			else
 			begin
 				tMemAddr=tAguAddr;
-				tMemData=regValRs;
+				tMemData=regValRsB;
 				tMemStore=1;
 			end
 		end
@@ -764,7 +828,76 @@ begin
 			tCtlOutSr=ctlInSSr;
 			tCtlOutSp=ctlInSGr;
 		end
-		
+
+
+		UCMD_FPU_FADD: begin
+			fpaIsEn = 1;
+//			fpaIsSub = 0;
+			tRegOutVal = fpaDst;
+			tRegOutId = regIdRn;
+		end
+
+		UCMD_FPU_FSUB: begin
+			fpaIsEn = 1;
+//			fpaIsSub = 1;
+			tRegOutVal = fpaDst;
+			tRegOutId = regIdRn;
+		end
+
+		UCMD_FPU_FMUL: begin
+			fpmIsEn = 1;
+			tRegOutVal = fpmDst;
+			tRegOutId = regIdRn;
+		end
+
+		UCMD_FPU_FABS: begin
+			tRegOutVal[31] = 0;
+			tRegOutVal[30:0] = regValRt[30:0];
+			tRegOutId = regIdRn;
+		end
+		UCMD_FPU_FNEG: begin
+			tRegOutVal[31] = !regValRt[31];
+			tRegOutVal[30:0] = regValRt[30:0];
+			tRegOutId = regIdRn;
+		end
+
+		UCMD_FPU_FRCP: begin
+			tRegOutVal[31] = regValRt[31];
+			tRegOutVal[30:0] = (0-(regValRt[30:0]-31'h3F800000))+
+				31'h3F800000;
+			tRegOutId = regIdRn;
+		end
+
+		UCMD_FPU_FSQRT: begin
+			tRegOutVal[31] = regValRt[31];
+			tRegOutVal[30:0] = ((regValRt[30:0]-31'h3F800000)>>>1)+
+				31'h3F800000;
+			tRegOutId = regIdRn;
+		end
+
+		UCMD_FPU_FCMPEQ: begin
+			tCtlOutSr[0] = (regValRs == regValRt);
+		end
+
+		UCMD_FPU_FCMPGT: begin
+			if(regValRs[31])
+			begin
+				if(regValRt[31])
+				begin
+					tCtlOutSr[0] = (regValRs[30:0] < regValRt[30:0]);
+				end else begin
+					tCtlOutSr[0] = 0;
+				end
+			end else begin
+				if(!regValRt[31])
+				begin
+					tCtlOutSr[0] = (regValRs[30:0] > regValRt[30:0]);
+				end else begin
+					tCtlOutSr[0] = 1;
+				end
+			end
+		end
+
 		default: begin end
 	endcase
 
@@ -784,11 +917,11 @@ begin
 	if(tMacOp!=0)
 	begin
 		case(tMacOp)
-			2'h0: tCtlOutMac = ctlInMac;
+			2'h0: tCtlOutMac = {ctlInMach, ctlInMacl};
 			2'h1: tCtlOutMac = tMacValRu;
-			2'h2: tCtlOutMac = ctlInMac + tMacValRu;
+			2'h2: tCtlOutMac = {ctlInMach, ctlInMacl} + tMacValRu;
 			2'h3: begin
-				tCtlOutMac = ctlInMac;
+				tCtlOutMac = {ctlInMach, ctlInMacl};
 				tRegOutVal = tMacValRu[31:0];
 			end
 		endcase

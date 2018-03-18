@@ -1,0 +1,626 @@
+BGBTech WideJex 1
+* Another Random ISA idea.
+* VLIW Based.
+* Instruction blocks are 64 or 128 bits.
+** Organized as 3 or 6 instruction words, each 20 bits wide.
+** A 128-bit block is either interpreted as 2 blocks of 3 instructions, or 1 block of 6 instructions.
+
+== Possibility 1 ==
+
+Block Alignment:
+* Blocks encoding 3 instructions will have 64 bit alignment.
+* Blocks encoding 6 instructions will have 128 bit alignment.
+** 64 and 128 bit blocks may be mixed so long as alignment is observed.
+
+Registers:
+* Uses 32 registers each of which is 64 bits.
+** R15 will be a Stack Pointer.
+*** For many operations, R15 will be Read Only.
+** Operations with only a 4 bit register field may only access R0..R15.
+
+* SRn: Status Registers
+** SR0: MACH (Unused)
+** SR1: MACL (Unused)
+** SR2: PR, Program Link Register
+* CRn: Control Registers
+** CR0: SR, Status Flags Register
+** CR1: GBR, Global Base Register (?)
+** CR2: VBR, Vector Base Register
+
+General:
+* Layout (Word64):
+** Bits  19:  0: Op1
+** Bits  39: 20: Op2
+** Bits  59: 40: Op3
+** Bits  63: 60: Tag
+* Layout (Word128):
+** Bits  19:  0: Op1
+** Bits  39: 20: Op2
+** Bits  59: 40: Op3
+** Bits  63: 60: Tag0
+** Bits  83: 64: Op4
+** Bits 103: 84: Op5
+** Bits 123:104: Op6
+** Bits 127:123: Tag1
+* Tag: Tag=WABC: Wide, A/B/C
+** W: Indicates whether the following block may run in parallel.
+*** Tag0.W: Whether to treat block as 2x3 or 1x6 ops.
+*** Tag1.W: Whether the following block may be chained (if Tag0.W=1)
+**** Both blocks must be full width.
+*** Whether the target is 3 wide, 6 wide, or wider, will be variable.
+*** Generated code should not rely on a specific width.
+** A/B/C are currently reserved and set to 0.
+
+* If Tag0.W is Clear:
+** First cycle, Op1/2/3 are executed in Slots 1/2/3.
+** Next cycle, Op4/5/6 are executed in Slots 1/2/3.
+* If Tag0.W is Set:
+** First cycle, Op1/2/3/4/5/6 are executed in Slots 1/2/3/4/5/6.
+** Next cycle, the next word is executed.
+
+
+* Some instructions will be specific to specific slots.
+** Compare and Branch instructions may only appear in Slot1.
+** MUL and SHAD may also be specific to Slot1.
+** Along with operations which access memory.
+** Along with anything else that modifies SR.
+
+* Branches may have a Delay Slot.
+** In delay-slot forms, the following instruction block will be executed.
+** In non-delay-slot forms, the pipeline will be flushed.
+** Branches will be in terms of 128 bit blocks.
+*** Branches will be relative to the block following the delay slot.
+* PC will generally have the low nibble as 0001.
+** Setting the LSB to 0 will be used for BJX1-64A interop.
+
+Change:
+* Branches will be in terms of 64-bit words.
+** Relative to block: "PC1=(PC+16)+(disp*8);".
+*** Direct branch distance will be +/- 8kB.
+** F.N: Setting this bit will clear the LSB.
+
+Nibble:
+* d: Displacement
+
+* e: Extension
+** e=QNMO
+** Q: 0=DWORD, 1=QWORD
+*** Reserved / MBZ for ops which are size-independent.
+** N/M/O: Bit 4 of Rn, Rm, and Ro.
+** Some ops with no Ro may use O to encode Unsigned forms.
+*** 0zz0: MOV.L, MULL.L
+*** 0zz1: MOVU.L, MULU.L
+*** 1zz0: MOV.Q, MUL.Q
+*** 1zz1: Resv
+* f: Extension 2
+** f=NMII / NIII
+
+* m: Rm, or register in Rm position ( 7..4), typically Source.
+* n: Rn, or register in Rn position (11..8), typically Dest.
+* o: Ro, or register in Ro position ( 3..0), typically Index.
+
+* s: Rs, or register in Rs/Rm position ( 7..4), Source.
+* t: Rt, or register in Rt/Ro position ( 3..0), Source.
+
+* z: Unknown / Reserved, Set to Zero
+
+Instructions:
+* e0nm0  -
+* e0nm1  -
+* e0nm2  STC		Cm, Rn
+** E.O:  CMOVT		Rm, Rn			//Conditional Move (True)
+* e0nm3  
+*  e0n08 BSRF		Rn				//BSR, PC+Rn
+*  e0n18 -
+*  e0n28 BRAF		Rn				//BRA, PC+Rn
+* e0nm4  MOV.B		Rm, @(Rn, R0)
+* e0nm5  MOV.W		Rm, @(Rn, R0)
+* e0nm6  MOV.L/Q	Rm, @(Rn, R0)
+* e0nm7  -
+* e0nm8  
+*  z0z08 CLRT
+*  z0z18 SETT
+*  z0z28 -
+*  z0z38 -
+*  z0z48 CLRS
+*  z0z58 CLRS
+*  z0z68 NOTT
+* e0nm9
+*  z0z09 NOP
+* e0nmA  STS		Sm, Rn
+** E.O:  CMOVF		Rm, Rn			//Conditional Move (False)
+* e0nmB  
+*  z0z0B RTS
+*  z0z1B SLEEP
+*  z0z2B RTE
+*  z0z3B BREAK
+*  z0z4B -
+*  z0z5B -
+*  z0z6B RTS/N
+*  z0m7B RTV/N
+
+* e0nmC  MOV.B	@(Rm, R0), Rn
+* e0nmD  MOV.W	@(Rm, R0), Rn
+* e0nmE  MOV.L/Q	@(Rm, R0), Rn
+* e0nmF  -
+
+* e1nmd  MOV.L/Q  Rm, @(Rn, disp5)
+
+* e2nm0  MOV.B Rm, @Rn			//Store Byte Rm to @Rn
+* e2nm1  MOV.W Rm, @Rn			//Store Word Rm to @Rn
+* e2nm2  MOV.L/Q Rm, @Rn		//Store DWord Rm to @Rn
+* e2nm3  -
+* e2nm4  MOV.B Rm, @-Rn		//Store Rm to Byte @Rn then Rn=Rn-1
+* e2nm5  MOV.W Rm, @-Rn		//Store Rm to Word @Rn then Rn=Rn-2
+* e2nm6  MOV.L/Q Rm, @-Rn		//Store Rm to DWord @Rn then Rn=Rn-4
+* e2nm7  -
+* e2nm8  TST Rm, Rn			//Test Rm&Rn, updating SR.T
+* e2nm9  AND Rm, Rn			//And Rm and Rn, Storing result in Rn
+* e2nmA  XOR Rm, Rn			//Xor Rm and Rn, Storing result in Rn
+* e2nmB  OR  Rm, Rn			//Or Rm and Rn, Storing result in Rn
+* e2nmC  -
+* e2nmD  -
+* e2nmE  MULL Rm, Rn			//Multiply, Keep Low Bits, Rn=Rm*Rn
+* e2nmF  MULH Rm, Rn			//Multiply, Keep High Bits
+** e.O: Sign/Unsigned
+** e.Q: DWord/QWord (Input side)
+
+* e3nm0  CMPEQ Rm, Rn			//Compare for Equality
+* e3nm1  -
+* e3nm2  CMPHS Rm, Rn			//Compare for unsigned Greater/Equal
+* e3nm3  CMPGE Rm, Rn			//Compare for signed Greater/Equal
+* e3nm4  -
+* e3nm5  -
+* e3nm6  CMPHI Rm, Rn			//Compare for unsigned Greater
+* e3nm7  CMPGT Rm, Rn			//Compare for signed Greater
+* e3nm8  SUB Rm, Rn				//Subtract
+* e3nm9  -
+* e3nmA  SUBC Rm, Rn			//Subtract, Carry -> T
+* e3nmB  SUBV Rm, Rn			//Subtract, Overflow -> T
+* e3nmC  ADD Rm, Rn				//Add
+* e3nmD  -
+* e3nmE  ADDC Rm, Rn			//Add with Carry, Carry -> T
+* e3nmF  ADDV Rm, Rn			//Add, Overflow -> T
+
+* e4nm0  -
+* e4nm1  -
+* e4nm2  STS Sm, @-Rn
+* e4nm3  STC Cm, @-Rn
+* e4nm4  -
+* e4nm5  -
+* e4nm6  LDS @Rn+, Sm
+* e4nm7  LDC @Rn+, Cm
+* e4nm8  -
+* e4nm9  -
+* e4nmA  LDS Rn, Sm
+* e4nmB  -
+* e4nmC  SHAD.L/Q Rm, Rn
+* e4nmD  SHLD.L/Q Rm, Rn
+* e4nmE  LDC Rn, Cm
+* e4nmF  -
+
+* e5nmd  MOV.L/Q @(Rm,disp5), Rn	//Load DWord From Rm+(4|8)*Disp
+
+* e6nm0  MOV.B @Rm, Rn				//B: Zero extend to QWord
+* e6nm1  MOV.W @Rm, Rn				//B: Zero extend to QWord
+* e6nm2  MOV.L/Q @Rm, Rn			//B: Extend to QWord
+* e6nm3  MOV Rm, Rn
+* e6nm4  MOV.B @Rm+, Rn
+* e6nm5  MOV.W @Rm+, Rn
+* e6nm6  MOV.L/Q @Rm+, Rn			//B: Extend to QWord
+* e6nm7  NOT Rm, Rn
+* e6nm8  SWAP.B Rm, Rn				//Swap Bytes
+* e6nm9  SWAP.W Rm, Rn				//Swap Words
+* e6nmA  NEGC Rm, Rn
+* e6nmB  NEG Rm, Rn
+* e6nmC  EXTU.B Rm, Rn
+* e6nmD  EXTU.W/L Rm, Rn
+* e6nmE  EXTS.B Rm, Rn
+* e6nmF  EXTS.W/L Rm, Rn
+
+* f7nii  ADD #imm11s, Rn			//Add 11-bit Immed
+
+* z80zz  -
+* f81dd  BRA/N disp11s
+* z82zz  -
+* f83dd  BSR/N disp11s
+* z84zz  -
+* f85dd  BRA disp11s
+* z86zz  -
+* f87dd  BSR disp11s
+* z88zz  -
+* f89dd  BT disp11s
+* z8Azz  -
+* f8Bdd  BF disp11s
+* z8Czz  -
+* f8Ddd  BTS disp11s
+* z8Ezz  -
+* f8Fdd  BFS disp11s
+
+* f9nii  LDSH10 #imm10, Rn			//Rn=(Rn<<10)|Imm10
+** 49nst  ADD Rs, Rt, Rn
+** 59nst  SUB Rs, Rt, Rn
+** 69nst  MUL Rs, Rt, Rn			//Slot 1
+** 79nst  AND Rs, Rt, Rn
+** C9nst  OR  Rs, Rt, Rn
+** D9nst  XOR Rs, Rt, Rn
+** E9nst  SHADQ Rs, Rt, Rn			//Slot1
+** F9nst  CSELT Rs, Rt, Rn			//Rn=SR.T?Rs:Rt
+
+* eAnmo  MOV.L/Q Rm, @(Rn,Ro)		//Store Rm to Rn+(4|8)*Ro
+
+* eBnmo  MOV.L/Q @(Rm,Ro), Rn		//Load From Rm+(4|8)*Ro
+
+* zCzzz
+
+* zDzzz
+
+* fEnii  MOV #imm11s, Rn		//Load 11-bit constant
+* zFzzz
+
+
+BJX1 Tweaks:
+* 8---
+**	CC0e-80zz  -
+**	CC0f-81dd ! BRA/N disp11s
+**	CC0f-83dd ! BSR/N disp11s
+**	CC0f-85dd ! BRA disp11s
+**	CC0f-87dd ! BSR disp11s
+**	CC0f-89dd ! BT disp11s
+**	CC0f-8Bdd ! BF disp11s
+**	CC0f-8Ddd ! BTS disp11s
+**	CC0f-8Fdd ! BFS disp11s
+***		Special Branches (BWJX).
+***		Optional: Setting F.N will allow branching into BWJX mode.
+***		"PC1=(((PC+6)+(disp*8))&(~7))|1;"
+
+
+== Possibility 2 ==
+
+Block Alignment:
+* Block encoding with 2 instructions will have 64 bit alignment.
+* Block encoding with 5 instructions will have 128 bit alignment.
+* Each instruction will be 24 bits.
+
+Layout:
+* Word64:
+** Bits  23:  0: Op1
+** Bits  47: 24: Op2
+** Bits  59: 48: Resv
+** Bits  63: 60: Tag0	//0x2
+* Word128:
+** Bits  23:  0: Op1
+** Bits  47: 24: Op2
+** Bits  59: 48: Op5L
+** Bits  63: 60: Tag0	//0xA
+** Bits  87: 64: Op3
+** Bits 111: 88: Op4
+** Bits 123:112: Op5H
+** Bits 127:124: Tag1
+
+Instruction Coding:
+* eiOxxx
+
+Instructions:
+* ez0nm0  -
+* ez0nm1  -
+* ez0nm2  -
+* ez0nm3  -
+* eo0nm4  MOV.B		Rm, @(Rn, Ro)
+* eo0nm5  MOV.W		Rm, @(Rn, Ro)
+* eo0nm6  MOV.L		Rm, @(Rn, Ro)
+* eo0nm7  MOV.Q		Rm, @(Rn, Ro)
+* ez0nm8
+** zz0z08 -
+
+** e10m18 CMP/PZ	Rn
+** eA0m18 ! MOV.Q	Rm, @(PC, R0)
+** eB0m18 ! FMOV.S	FRm, @(PC, R0)
+** eC0m18 ! MOV.B	Rm, @(PC, R0)
+** eD0m18 ! MOV.W/Q	Rm, @(PC, R0)
+** eE0m18 ! MOV.L	Rm, @(PC, R0)
+
+** zz0z28 -
+
+** e00n38 BSRF		Rn				//BSR, PC+Rn
+** e10n38 JSR		Rn				//BSR, Rn
+** e20n38 BRAF		Rn				//BRA, PC+Rn
+** e30n38 JMP		Rn				//BRA, Rn
+
+** zz0z48 -
+
+** e10m58 CMP/PL	Rn
+** eA0n58 ! MOV.Q @(PC, R0), Rn
+** eB0n58 ! FMOV.S @(PC, R0), FRn
+** eC0n58 ! MOV.B @(PC, R0), Rn
+** eD0n58 ! MOV.W/Q @(PC, R0), Rn
+** eE0n58 ! MOV.L @(PC, R0), Rn
+** eF0n58 ! LEA.B @(PC, R0), Rn
+
+** zz0z68 -
+** zz0z78 -
+** z00z88 CLRT
+** z10z88 SETT
+** z20z88 -
+** z30z88 -
+** z40z88 CLRS
+** z50z88 CLRS
+** z60z88 NOTT
+** z00z98 NOP
+** zz0zA8 -
+** z00zB8 RTS
+** z10zB8 SLEEP
+** z20zB8 RTE
+** z30zB8 BREAK
+** z40zB8 -
+** z50zB8 -
+** z60zB8 RTS/N
+** e70mB8 RTV/N
+** zz0zC8 -
+** zz0zD8 -
+** zz0zE8 -
+** zz0zF8 -
+* ez0nm9  -
+* ez0nmA
+** e00nmA STS		Sm, Rn
+** e10nmA STC		Cm, Rn
+** e20nmA STS		Sm, @-Rn
+** e30nmA STC		Cm, @-Rn
+** e40nmA LDS		Rn, Sm
+** e50nmA LDC		Rn, Cm
+** e60nmA LDS		@Rn+, Sm
+** e70nmA LDC		@Rn+, Cm
+* ez0nmB  -
+* eo0nmC  MOV.B		@(Rm, Ro), Rn
+* eo0nmD  MOV.W		@(Rm, Ro), Rn
+* eo0nmE  MOV.L		@(Rm, Ro), Rn
+* eo0nmF  MOV.Q		@(Rm, Ro), Rn
+
+* ed1nmo  MOV.L/Q	Rm, @(Rn, Ro, disp4)
+
+* fd2nm0  MOV.B		Rm, @(Rn, disp6)		//Store Byte Rm to @Rn
+* fd2nm1  MOV.W		Rm, @(Rn, disp6)		//Store Word Rm to @Rn
+* fd2nm2  MOV.L		Rm, @(Rn, disp6)		//Store DWord Rm to @Rn
+* fd2nm3  MOV.Q		Rm, @(Rn, disp6)		//Store QWord Rm to @Rn
+* ez2nm4  -
+* ez2nm5  -
+* ez2nm6  -
+* ez2nm7  -
+* ez2nm8  -
+* fj2nm9  AND		Rm, #imm6, Rn		//And
+* fj2nmA  XOR		Rm, #imm6, Rn		//Xor
+* fj2nmB  OR		Rm, #imm6, Rn		//Or
+* fi2nmC  -
+* fi2nmD  -
+* fj2nmE  MULL		Rm, #imm6, Rn	//Rn=Rm*Imm6 (Imm6 Zero-Ext)
+* fj2nmF  MULL		Rm, #-imm6, Rn	//Rn=Rm*Imm6 (Imm6 One-Ext)
+
+* fi3ni0  CMP/EQ	#imm10s, Rn		//Compare for Equality
+* ez3nm1  -
+* fi3ni2  CMP/HS	#imm10s, Rn		//Compare for Greater/Equal
+* fi3ni3  CMP/GE	#imm10s, Rn		//Compare for Greater/Equal
+* ez3nm4  -
+* ez3nm5  -
+* fi3ni6  CMP/HI	#imm10s, Rn		//Compare for Greater
+* fi3ni7  CMP/GT	#imm10s, Rn		//Compare for Greater
+* fj3nm8  SUB		Rm, #imm6, Rn	//Subtract, Rn=Rm-imm6
+* fj3nm9  AND		Rm, #-imm6, Rn
+* fi3nmA  SHAL.Q	Rm, #imm6, Rn
+* fi3nmB  SHLL.Q	Rm, #imm6, Rn
+* fj3nmC  ADD		Rm, #imm6, Rn	//Add, Rn=Rm+imm6
+* ez3nmD  -
+* fi3nmE  SHAR.Q	Rm, #imm6, Rn
+* fi3nmF  SHLR.Q	Rm, #imm6, Rn
+
+* ez4nm0  -
+* ez4nm1  -
+* ez4nm2  -
+* ez4nm3  -
+* ez4nm4  -
+* ez4nm5  -
+* ez4nm6  -
+* ez4nm7  -
+* ez4nm8  -
+* ez4nm9  -
+* ez4nmA  -
+* ez4nmB  -
+* fi4nmC  SHAD.L Rm, #imm6, Rn
+* fi4nmD  SHLD.L Rm, #imm6, Rn
+* ez4nmE  -
+* ez4nmF
+** e04nmF CMP/EQ	Rm, Rn			//e.o=0: Compare for Equality
+** e14nmF -
+** e24nmF CMP/HS	Rm, Rn			//Compare for unsigned Greater/Equal
+** e34nmF CMP/GE	Rm, Rn			//Compare for signed Greater/Equal
+** e44nmF -
+** e54nmF DMULU.L	Rm, Rn			//MAC=Rm*Rn
+** e64nmF CMP/HI	Rm, Rn			//Compare for unsigned Greater
+** e74nmF CMP/GT	Rm, Rn			//Compare for signed Greater
+** e84nmF TST		Rm, Rn			//Test Rm&Rn, updating SR.T
+** e94nmF -
+** eA4nmF SUBC		Rm, Rn			//Subtract, Carry -> T
+** eB4nmF SUBV		Rm, Rn			//Subtract, Overflow -> T
+** eC4nmF -
+** eD4nmF DMULS.L	Rm, Rn			//MAC=Rm*Rn
+** eE4nmF ADDC		Rm, Rn			//Add with Carry, Carry -> T
+** eF4nmF ADDV		Rm, Rn			//Add, Overflow -> T
+
+* ed5nmo  MOV.L/Q	@(Rm, Ro, disp4), Rn
+
+* fd6nm0  MOV.B		@(Rm, disp6), Rn
+* fd6nm1  MOV.W		@(Rm, disp6), Rn
+* fd6nm2  MOV.L		@(Rm, disp6), Rn
+* fd6nm3  MOV.Q		@(Rm, disp6), Rn
+* eo6nm4  LEA.B		@(Rm, Ro), Rn
+* eo6nm5  LEA.W		@(Rm, Ro), Rn
+* eo6nm6  LEA.L		@(Rm, Ro), Rn
+* eo6nm7  LEA.Q		@(Rm, Ro), Rn
+* fd6nm8  LEA.B		@(Rm, disp6), Rn
+* fd6nm9  LEA.W		@(Rm, disp6), Rn
+* fd6nmA  LEA.L		@(Rm, disp6), Rn
+* fd6nmB  LEA.Q		@(Rm, disp6), Rn
+* fd6nmC  MOVU.B	@(Rm, disp6), Rn
+* fd6nmD  MOVU.W	@(Rm, disp6), Rn
+* fd6nmE  MOVU.L	@(Rm, disp6), Rn
+* ez6nmF
+** e06nmF MOV.B		Rm, @-Rn		//Store Rm to Byte @Rn then Rn=Rn-1
+** e16nmF MOV.W		Rm, @-Rn		//Store Rm to Word @Rn then Rn=Rn-2
+** e26nmF MOV.L/Q	Rm, @-Rn		//Store Rm to DWord @Rn then Rn=Rn-4
+** e36nmF MOV		Rm, Rn
+** e46nmF MOV.B		@Rm+, Rn
+** e56nmF MOV.W		@Rm+, Rn
+** e66nmF MOV.L/Q	@Rm+, Rn			//B: Extend to QWord
+** e76nmF NOT		Rm, Rn
+** e86nmF SWAP.B	Rm, Rn				//Swap Bytes
+** e96nmF SWAP.W	Rm, Rn				//Swap Words
+** eA6nmF NEGC		Rm, Rn
+** eB6nmF NEG		Rm, Rn
+** eC6nmF EXTU.B	Rm, Rn
+** eD6nmF EXTU.W/L	Rm, Rn
+** eE6nmF EXTS.B	Rm, Rn
+** eF6nmF EXTS.W/L	Rm, Rn
+
+* fi7nii / ADD #imm15s, Rn			//Add 15-bit Immed
+* ii7nii  ADD #imm16s, Rn			//Add 16-bit Immed
+
+* zz80zz  -
+* zz81zz  -
+* fd82dd  BRA/N disp15s
+* fd83dd  BSR/N disp15s
+* zz84zz  -
+* zz85zz  -
+* fd86dd  BRA disp15s
+* fd87dd  BSR disp15s
+* zz88zz  -
+* fd89dd  BT disp15s
+* ii8Aii  LDHF16 #imm, FPUL			//Load Half Imm16 into FPUL Float
+* fd8Bdd  BF disp15s
+* ii8Cii  LDIF16 #imm, FPUL			//Load (Imm16<<16) into FPUL
+* fd8Ddd  BTS disp15s
+* zz8Ezz  -
+* fd8Fdd  BFS disp15s
+
+* fi9nii  / LDSH14 #imm14, Rn			//Rn=(Rn<<14)|Imm14
+* ii9nii  LDSH16 #imm16, Rn			//Rn=(Rn<<16)+Imm16
+
+* eoAnm0  ADD		Rm, Ro, Rn		//Add, Rn=Rm+Ro
+* eoAnm1  SUB		Rm, Ro, Rn		//Subtract, Rn=Rm-Ro
+* eoAnm2  MUL		Rm, Ro, Rn		//Multiply, Keep Low Bits, Rn=Rm*Ro
+* eoAnm3  AND		Rm, Ro, Rn		//And Rm and Rn, Storing result in Rn
+* eoAnm4  OR		Rm, Ro, Rn		//Rn=Rm|Ro
+* eoAnm5  XOR		Rm, Ro, Rn		//Rn=Rm^Ro
+* eoAnm6  SHAD.L/Q	Rm, Ro, Rn
+* eoAnm7  SHLD.L/Q	Rm, Ro, Rn
+* eoAnm8  CSELT		Rm, Ro, Rn		//Rn=SR.T?Rm:Ro
+* eoAnm9  -
+* eoAnmA  MULUH		Rm, Ro, Rn		//Multiply, Rn=(Rm*Ro)>>N
+* eoAnmB  MULSH		Rm, Ro, Rn		//Multiply, Rn=(Rm*Ro)>>>N
+* eoAnmC  -
+* eoAnmD  -
+* eoAnmE  -
+* eoAnmF  -
+
+* iiBiii  MOV		#imm20s, R0
+
+* zzCzzz  -
+* fdC0md ? MOV.B	Rm, @(GBR, disp10s)	//
+* fdC1md ? MOV.W	Rm, @(GBR, disp10s)	//
+* fdC2md ? MOV.L	Rm, @(GBR, disp10s)	//
+* fdC3md ? MOV.Q	Rm, @(GBR, disp10s)	//
+* fdC4nd ? MOV.B	@(GBR, disp10s), Rn		//
+* fdC5nd ? MOV.W	@(GBR, disp10s), Rn	//
+* fdC6nd ? MOV.L	@(GBR, disp10s), Rn		//
+* fdC5nd ? MOV.Q	@(GBR, disp10s), Rn	//
+** F.N: 0=GBR, 1=SP
+
+* fiC8ni ? TST		#imm10s, Rn
+* fiC9ni ? AND		#imm10s, Rn
+* fiCAni ? XOR		#imm10s, Rn
+* fiCBni ? OR		#imm10s, Rn
+
+* iiDiii  -
+
+* fiEnii / MOV		#imm15s, Rn		//Load 15-bit constant
+* iiEnii MOV		#imm16s, Rn		//Load 16-bit constant
+
+* zzFzzz
+
+* eoFnm0  FADD		FRm, FRo, FRn
+* eoFnm1  FSUB		FRm, FRo, FRn
+* eoFnm2  FMUL		FRm, FRo, FRn
+* eoFnm3  FDIV		FRm, FRo, FRn
+* eoFnm4  -
+* eoFnm5  -
+* eoFnm6  FMOV		@(Rm, Ro), FRn
+* eoFnm7  FMOV		FRm, @(Rn, Ro)
+* edFnm8  FMOV		@(Rm, disp5), FRn
+* eoFnm9  -
+* edFnmA  FMOV		FRm, @(Rn, disp5)
+* eoFnmB  -
+* eoFnmC
+*  e0FnmC -
+*  e1FnmC -
+*  e2FnmC -
+*  e3FnmC -
+*  e4FnmC FCMPEQ	FRm, FRn
+*  e5FnmC FCMPGT	FRm, FRn
+*  e6FnmC FMOV		Rm, FRn
+*  e7FnmC FMOV		FRm, Rn
+*  e8FnmC -
+*  e9FnmC FMOV		@Rm+, FRn
+*  eAFnmC -
+*  eBFnmC FMOV		FRm, @Rn-
+*  eCFnmC FMOV		FRm, FRn
+*  eDFnmC -
+*  eEFnmC -
+*  eFFnmC -
+
+* eoFnmD
+*  e0Fn0D FSTS		FRn
+*  e1Fm0D FLDS		FRm
+*  e2Fn0D FLOAT		FRn
+*  e3Fm0D FTRC		FRm
+*  e4Fn0D FNEG		FRn
+*  e5Fn0D FABS		FRn
+*  e6Fn0D FSQRT		FRn
+*  e7Fi0D -
+*  e8Fn0D FLDI0		FRn		//Load 0.0
+*  e9Fn0D FLDI1		FRn		//Load 1.0
+*  eAFn0D FCNVSD	FRn
+*  eBFn0D FCNVDS	FRm
+*  eCFi0D -
+*  iDFi0D PSETMD	#imm8
+*  eEFi0D -
+*  eFFi0D -
+* eoFnmE
+* eoFnmF
+
+
+== Possibility 3 ==
+
+Block:
+* Blocks are 64 or 80 bits.
+** Representing 2 or 3 logical instructions.
+* Operates in the same mode as 16/32.
+* Uses same instruction format as Possibility 2.
+* Will constrain the positions in which instructions can appear.
+** Each 128-bit block is divided into positions 0, 2, 4, 6, ..., E.
+*** 16 and 32 bit instructions may appear in any position.
+*** 64-bit blocks may in 0..A.
+*** 80-bit blocks may in 0..8.
+
+64-bit block:
+* 8CEt_uuvv_uuuu_vvvv
+* t=WABC
+** W: Allow Chain
+** A: 8E/CE (Slot 1)
+** B: 8E/CE (Slot 2)
+** C: Reserved (0)
+* 8E/CE:
+** 0: Interpret instruction as in an 8Exx block.
+** 1: Interpret instruction as in an CExx block.
+
+80-bit block:
+* 3uu9_vvww_uuuu_vvvv_wwww
+* Encodes 3 instruction slots.
+* May not encode a chain.
